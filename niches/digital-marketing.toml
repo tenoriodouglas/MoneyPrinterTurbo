@@ -1,0 +1,112 @@
+# Advertisers here sell to the same audience the channel attracts, which is
+# why rates hold up. Credibility depends on showing mechanics, not results.
+
+[niche]
+id = "digital-marketing"
+name = "Digital Marketing & Solo Business"
+language = "en"
+platforms = ["tiktok", "youtube_shorts"]
+
+[economics]
+cpm_low = 12.0
+cpm_high = 18.0
+competition = "high"
+
+[audience]
+description = "Freelancers, solo operators, and small agency owners who need clients this quarter and are tired of advice that assumes an ad budget."
+pain_points = [
+    "inconsistent lead flow with no repeatable source",
+    "pricing by the hour and capping their own income",
+    "chasing every channel instead of finishing one",
+    "offers described by deliverable instead of outcome",
+    "no follow-up system, so warm leads go cold",
+]
+
+[content]
+angles = [
+    "offer: rewriting a weak offer into one that sells, line by line",
+    "pricing: moving from hourly to outcome, with the arithmetic",
+    "channel-math: what one channel needs to produce to be worth it",
+    "teardown: why a common funnel leaks, and where",
+    "follow-up: the step between interest and payment nobody builds",
+    "positioning: narrowing the audience and what it does to close rate",
+    "contrarian: a tactic that works only at a scale most people are not at",
+    "first-client: the path to one paying client without an audience",
+]
+system_prompt = """
+You write voiceover scripts for a faceless short-form channel about getting
+clients and pricing work as a solo operator or small agency.
+
+Voice: practical, direct, allergic to guru language. You describe mechanics,
+not outcomes.
+
+Hard rules:
+- Open on the mistake or the mechanism. No greeting, no channel name, no
+  income claim.
+- One offer, one channel, or one pricing decision per script.
+- Never promise earnings, never imply a typical result, never use a revenue
+  figure as a hook. That framing is what gets this category flagged.
+- Quantify effort and conversion in structural terms: how many conversations,
+  how many steps, what the close rate needs to be for the math to work.
+- Use illustrative numbers and label them illustrative.
+- Give the actual words where wording is the point. Scripts about an offer
+  should contain the offer.
+- Close with the one change to make before the next client conversation,
+  stated as an instruction. Never ask for likes, follows, or comments.
+- Plain spoken English. No markdown, no headings, no emoji, no stage
+  directions, no speaker labels. Output only the words to be read aloud.
+- Do not invent case studies, client names, or platform benchmark data.
+"""
+script_guidance = """
+Target 170-210 words, about 65-80 seconds spoken. Stay above one minute.
+Structure: the mistake, why it feels correct, the mechanism that fixes it,
+the wording or arithmetic in concrete form, the one change to make.
+"""
+banned_phrases = [
+    "in today's video",
+    "six figures",
+    "passive income",
+    "crushing it",
+    "this one weird trick",
+    "let's dive in",
+    "scale to the moon",
+    "hustle harder",
+]
+seed_topics = [
+    "rewriting an offer described by deliverable into one described by outcome",
+    "the arithmetic that makes hourly pricing cap your income",
+    "what one acquisition channel has to produce to be worth keeping",
+    "the follow-up step between interest and payment that nobody builds",
+    "getting a first paying client without an audience",
+]
+visual_terms = [
+    "person working laptop cafe",
+    "marketing analytics dashboard",
+    "creative team brainstorm",
+    "social media phone screen",
+    "designer workspace desk",
+    "video camera setup studio",
+    "notebook planning strategy",
+    "city coworking space",
+]
+
+[video]
+aspect = "9:16"
+voice_names = [
+    "en-US-AriaNeural",
+    "en-US-SteffanNeural",
+    "en-US-JennyNeural",
+    "en-US-BrianNeural",
+]
+font_size = 52
+stroke_width = 3.5
+clip_duration = 4
+paragraph_number = 5
+
+[platform]
+hashtags = ["#freelancing", "#marketing", "#clientacquisition", "#solopreneur", "#agency"]
+
+[monetization]
+primary = "service_sales"
+notes = "The fastest revenue here is selling the production service itself: local businesses pay monthly for the videos this repo generates."
+affiliate_categories = ["done-for-you video service", "marketing SaaS referrals", "template and course sales"]

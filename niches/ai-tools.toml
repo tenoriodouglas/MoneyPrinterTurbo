@@ -1,0 +1,112 @@
+# Strong CPM with far lighter competition than finance, and the topic renews
+# itself weekly. Best risk-adjusted pick for a new channel.
+
+[niche]
+id = "ai-tools"
+name = "AI Tools & Practical Automation"
+language = "en"
+platforms = ["tiktok", "youtube_shorts"]
+
+[economics]
+cpm_low = 8.0
+cpm_high = 20.0
+competition = "medium"
+
+[audience]
+description = "Knowledge workers and small-business owners who keep hearing that AI saves time but have never seen a concrete workflow end to end."
+pain_points = [
+    "tool overload with no way to judge what is worth learning",
+    "demos that impress but do not survive real work",
+    "no sense of what a task actually costs once automated",
+    "fear of being outpaced by peers who adopted earlier",
+    "privacy and accuracy doubts nobody addresses plainly",
+]
+
+[content]
+angles = [
+    "workflow: one real task, start to finish, with the time it saves",
+    "comparison: two tools on the same job, name the one that wins and why",
+    "failure-mode: where this tool breaks and what to do instead",
+    "cost-breakdown: what the automation costs per month versus the manual hour",
+    "before-after: the task as it was, the task as it is now",
+    "underrated: a capability people own but never use",
+    "myth-bust: a confident claim about AI that does not survive contact",
+    "build: assemble something useful in the length of this video",
+]
+system_prompt = """
+You write voiceover scripts for a faceless short-form channel about using AI
+tools for real work.
+
+Voice: practical, specific, mildly skeptical. You have used the thing. You
+are not selling it.
+
+Hard rules:
+- Open on the concrete outcome or the concrete failure. No greeting, no
+  "AI is changing everything", no channel name.
+- One workflow or one comparison per script. Never a list of ten tools.
+- Quantify: minutes saved, dollars per month, number of steps removed.
+  If a number is an estimate, say it is an estimate.
+- Name the limitation honestly. Saying where a tool fails is what makes the
+  recommendation worth anything.
+- Describe steps in the order someone would actually do them.
+- Close with the first step to try, stated as an instruction. Never ask for
+  likes, follows, or comments.
+- Plain spoken English. No markdown, no headings, no emoji, no stage
+  directions, no speaker labels. Output only the words to be read aloud.
+- Do not invent product features, pricing, or benchmark results. Describe
+  capabilities in general terms rather than asserting specifics you cannot
+  verify, and prefer the workflow over the brand name.
+"""
+script_guidance = """
+Target 170-210 words, about 65-80 seconds spoken. Stay above one minute so
+the video qualifies for TikTok payouts.
+Structure: the outcome, the manual cost it replaces, the workflow in steps,
+the honest limitation, the first step to try.
+"""
+banned_phrases = [
+    "game changer",
+    "in today's video",
+    "AI is taking over",
+    "this will blow your mind",
+    "let's dive in",
+    "the future is here",
+    "you won't believe",
+]
+seed_topics = [
+    "turning a folder of messy notes into a searchable brief",
+    "the batch task most people still do by hand every week",
+    "where automated transcription quietly fails and how to catch it",
+    "what a small automation actually costs per month",
+    "the difference between a demo that impresses and one that survives real work",
+]
+visual_terms = [
+    "computer code screen",
+    "data server room",
+    "person typing keyboard closeup",
+    "abstract network connections",
+    "modern workspace monitor",
+    "circuit board macro",
+    "robot arm technology",
+    "digital interface hologram",
+]
+
+[video]
+aspect = "9:16"
+voice_names = [
+    "en-US-BrianNeural",
+    "en-US-EmmaNeural",
+    "en-US-AndrewNeural",
+    "en-US-AvaNeural",
+]
+font_size = 52
+stroke_width = 3.5
+clip_duration = 4
+paragraph_number = 5
+
+[platform]
+hashtags = ["#aitools", "#automation", "#productivity", "#techtips", "#workflow"]
+
+[monetization]
+primary = "affiliate"
+notes = "SaaS affiliate programs commonly pay recurring commission, which compounds better than ad revenue at small channel size."
+affiliate_categories = ["SaaS referrals", "course and template sales", "newsletter sponsorships"]

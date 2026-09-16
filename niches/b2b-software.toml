@@ -1,0 +1,110 @@
+# Small audience, expensive advertisers. Views are worth several times what a
+# general-entertainment view is worth, and competition is thin.
+
+[niche]
+id = "b2b-software"
+name = "B2B Software & Business Operations"
+language = "en"
+platforms = ["tiktok", "youtube_shorts"]
+
+[economics]
+cpm_low = 12.0
+cpm_high = 18.0
+competition = "low"
+
+[audience]
+description = "Operators at small companies choosing tools and fixing process: founders, ops leads, agency owners buying software with their own money."
+pain_points = [
+    "paying for overlapping tools nobody audits",
+    "processes that live in one person's head",
+    "onboarding that takes weeks because nothing is written down",
+    "picking software on a demo and regretting it in month three",
+    "manual reporting that eats a day every week",
+]
+
+[content]
+angles = [
+    "cost-audit: the spend line most companies never look at",
+    "process: a workflow rebuilt so it survives someone leaving",
+    "buying-mistake: the evaluation step teams skip and pay for later",
+    "metric: the number that tells you the process is broken",
+    "teardown: why a common setup breaks at a specific headcount",
+    "migration: what moving off a tool actually costs",
+    "delegation: the task to hand off first and how to document it",
+    "contrarian: a best practice that is wrong below a certain company size",
+]
+system_prompt = """
+You write voiceover scripts for a faceless short-form channel about running
+small companies and buying software.
+
+Voice: operator to operator. Concrete, unglamorous, slightly blunt. You have
+run the process, not read about it.
+
+Hard rules:
+- Open on the cost, the failure, or the number. No greeting, no "as a business
+  owner", no channel name.
+- One process or one decision per script. Never a listicle.
+- Quantify in hours per week, dollars per month, or headcount thresholds.
+  A claim without a unit does not belong in this script.
+- Name the threshold where advice flips. "This works under ten people" is the
+  kind of precision that earns trust.
+- Say what the tradeoff costs. Every recommendation has one.
+- Close with the specific audit or step to run this week, stated as an
+  instruction. Never ask for likes, follows, or comments.
+- Plain spoken English. No markdown, no headings, no emoji, no stage
+  directions, no speaker labels. Output only the words to be read aloud.
+- Do not invent vendor pricing, market-share figures, or survey results.
+  Use arithmetic the listener could redo, or mark the number as illustrative.
+"""
+script_guidance = """
+Target 170-210 words, about 65-80 seconds spoken. Stay above one minute.
+Structure: the cost or failure, why the usual setup produces it, the fix as a
+process, the threshold where it stops applying, the audit to run.
+"""
+banned_phrases = [
+    "in today's video",
+    "leverage synergies",
+    "at the end of the day",
+    "work smarter not harder",
+    "hey entrepreneurs",
+    "let's dive in",
+    "scale to the moon",
+]
+seed_topics = [
+    "the software spend audit most teams have never run",
+    "why documenting a process beats hiring for it",
+    "the evaluation step teams skip when buying software",
+    "the reporting task that quietly costs a day a week",
+    "the headcount where informal process stops working",
+]
+visual_terms = [
+    "business meeting office",
+    "spreadsheet data screen",
+    "team collaboration whiteboard",
+    "modern office interior",
+    "handshake business deal",
+    "laptop analytics dashboard",
+    "warehouse logistics operation",
+    "city business district",
+]
+
+[video]
+aspect = "9:16"
+voice_names = [
+    "en-US-ChristopherNeural",
+    "en-US-MichelleNeural",
+    "en-US-RogerNeural",
+    "en-US-AriaNeural",
+]
+font_size = 50
+stroke_width = 3.5
+clip_duration = 4
+paragraph_number = 5
+
+[platform]
+hashtags = ["#smallbusiness", "#operations", "#saas", "#businesstips", "#founders"]
+
+[monetization]
+primary = "lead_generation"
+notes = "This audience buys. A single consulting or done-for-you client is worth more than a year of ad revenue at this channel size."
+affiliate_categories = ["B2B SaaS referrals", "consulting leads", "template and SOP sales"]

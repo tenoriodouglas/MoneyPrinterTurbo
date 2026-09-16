@@ -1,0 +1,109 @@
+# Steady advertiser demand and stock footage suits it perfectly. Keep claims
+# market-neutral, since local conditions vary and dated numbers age badly.
+
+[niche]
+id = "real-estate"
+name = "Real Estate & Property Economics"
+language = "en"
+platforms = ["tiktok", "youtube_shorts"]
+
+[economics]
+cpm_low = 10.0
+cpm_high = 16.0
+competition = "medium"
+
+[audience]
+description = "First-time buyers and small landlords who understand price but not carrying cost, and who make six-figure decisions on instinct."
+pain_points = [
+    "judging affordability by monthly payment alone",
+    "ignoring the costs that arrive after closing",
+    "confusing appreciation with return",
+    "underestimating vacancy and maintenance on a rental",
+    "treating rent versus buy as an identity rather than a calculation",
+]
+
+[content]
+angles = [
+    "true-cost: the expense line buyers leave out of the math",
+    "rent-vs-buy: the calculation done properly, with the break-even",
+    "mechanism: how a rate change moves purchasing power",
+    "case-study: same property, two financing structures, different outcome",
+    "myth-bust: a property rule of thumb that breaks under scrutiny",
+    "cash-flow: what a rental actually nets after the unglamorous items",
+    "timing: why waiting for a price drop can cost more than it saves",
+    "inspection: the defect that changes the number most",
+]
+system_prompt = """
+You write voiceover scripts for a faceless short-form channel about property
+economics.
+
+Voice: analytical, calm, slightly corrective. You do the arithmetic buyers
+skip.
+
+Hard rules:
+- Open on the number that changes the decision. No greeting, no channel name.
+- One calculation or one decision per script.
+- Always separate price from carrying cost. That distinction is the channel.
+- Use illustrative round numbers and say they are illustrative. Do not quote
+  current interest rates, median prices, or market statistics as fact: they
+  are local, they date fast, and a wrong one destroys credibility.
+- State the assumption behind any calculation in one clause.
+- Say plainly that this is general education, not personalised financial
+  advice, whenever the script tells someone what to do with real money.
+- Close with the specific number to go and check, stated as an instruction.
+  Never ask for likes, follows, or comments.
+- Plain spoken English. No markdown, no headings, no emoji, no stage
+  directions, no speaker labels. Output only the words to be read aloud.
+"""
+script_guidance = """
+Target 170-210 words, about 65-80 seconds spoken. Stay above one minute.
+Structure: the number people get wrong, the cost they omit, the corrected
+calculation with stated assumptions, the break-even, what to go check.
+"""
+banned_phrases = [
+    "in today's video",
+    "location location location",
+    "get rich in real estate",
+    "passive income while you sleep",
+    "let's dive in",
+    "the market is about to crash",
+    "now is the best time to buy",
+]
+seed_topics = [
+    "the carrying costs that turn a good price into a bad deal",
+    "rent versus buy as a break-even calculation instead of an opinion",
+    "how a rate move changes what you can afford, in plain arithmetic",
+    "what a rental actually nets after vacancy and maintenance",
+    "why appreciation is not the same thing as return",
+]
+visual_terms = [
+    "modern house exterior",
+    "apartment building city",
+    "real estate agent keys",
+    "house interior living room",
+    "suburban neighborhood aerial",
+    "construction site building",
+    "signing contract documents",
+    "city skyline residential",
+]
+
+[video]
+aspect = "9:16"
+voice_names = [
+    "en-US-GuyNeural",
+    "en-US-JennyNeural",
+    "en-US-EricNeural",
+    "en-US-EmmaNeural",
+]
+font_size = 52
+stroke_width = 3.5
+clip_duration = 4
+paragraph_number = 5
+
+[platform]
+hashtags = ["#realestate", "#homebuying", "#propertyinvesting", "#firsttimehomebuyer", "#landlord"]
+
+[monetization]
+primary = "lead_generation"
+notes = "Mortgage broker and agent referral arrangements pay per qualified lead, which beats ad revenue per view by a wide margin."
+affiliate_categories = ["mortgage broker referrals", "agent referral fees", "property analysis tools"]

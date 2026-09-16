@@ -1,0 +1,116 @@
+# Highest advertiser demand on YouTube. Competition is heavy, so every brief
+# must carry a specific number or mechanism, never generic advice.
+
+[niche]
+id = "personal-finance"
+name = "Personal Finance & Wealth Building"
+language = "en"
+platforms = ["tiktok", "youtube_shorts"]
+
+[economics]
+cpm_low = 15.0
+cpm_high = 30.0
+competition = "high"
+
+[audience]
+description = "25-45 year olds with income but no system: they earn well, save erratically, and suspect they are behind."
+pain_points = [
+    "saving without a target, so progress is invisible",
+    "not knowing which account or order to fund first",
+    "treating investing as stock picking instead of rate and time",
+    "lifestyle creep eating every raise",
+    "debt priced above any realistic market return",
+]
+
+[content]
+angles = [
+    "contrarian: attack a piece of advice the audience already accepts",
+    "math-reveal: run one calculation on screen that changes the conclusion",
+    "case-study: two people, same income, different outcome, explain the fork",
+    "mechanism: name the thing that actually moves the number and why",
+    "cost-of-delay: what waiting five years does in concrete currency",
+    "myth-bust: a rule of thumb that breaks at a specific threshold",
+    "sequence: the order operations question, answered with a reason per step",
+    "hidden-fee: a cost the audience pays without seeing it",
+]
+system_prompt = """
+You write voiceover scripts for a faceless short-form finance channel.
+
+Voice: direct, numerate, unsentimental. You sound like someone who has run
+the numbers, not someone quoting a blog.
+
+Hard rules:
+- Open with the single most surprising claim. No greeting, no channel name,
+  no "in this video". The first sentence must be able to stop a scroll.
+- One idea per script. Do not survey a topic. Prove one thing.
+- Every claim that can carry a number carries one. Percentages, years,
+  currency amounts. Round them so they are speakable.
+- Name mechanisms: "savings rate", "sequence of returns", "expense ratio".
+  Precision is what separates this from generic advice.
+- Acknowledge the limit of the claim in one clause where it matters.
+  Assumptions stated plainly build more trust than confidence does.
+- Close on one specific action the listener can take this week, stated as an
+  instruction. Never ask for likes, follows, or comments.
+- Plain spoken English. No markdown, no headings, no emoji, no stage
+  directions, no speaker labels. Output only the words to be read aloud.
+- Never invent statistics or attribute a number to a named institution.
+  Use arithmetic the listener could redo, or describe the number as
+  illustrative.
+"""
+script_guidance = """
+Target 170-210 words, which reads as 65-80 seconds of speech. TikTok only
+pays on videos over one minute, so do not come in short.
+Structure: hook, the wrong belief, the number that breaks it, the mechanism
+underneath, one worked example, the action.
+"""
+banned_phrases = [
+    "in today's video",
+    "let's dive in",
+    "without further ado",
+    "hey guys",
+    "make sure to like and subscribe",
+    "money doesn't grow on trees",
+    "financial freedom is a journey",
+    "the power of compound interest is magic",
+]
+seed_topics = [
+    "why your savings rate sets your retirement date, not your salary",
+    "the real cost of a car payment measured in retirement years",
+    "why paying off an 18 percent card beats any investment return",
+    "what an expense ratio actually costs over thirty years",
+    "the order to fund accounts and the reason behind each step",
+]
+visual_terms = [
+    "city skyline morning",
+    "person working laptop desk",
+    "financial charts screen",
+    "counting money close up",
+    "modern office window",
+    "calculator notebook desk",
+    "stock market ticker",
+    "coffee shop laptop work",
+]
+
+[video]
+aspect = "9:16"
+voice_names = [
+    "en-US-AndrewNeural",
+    "en-US-AriaNeural",
+    "en-US-ChristopherNeural",
+    "en-US-JennyNeural",
+]
+font_size = 52
+stroke_width = 3.5
+subtitle_position = "two_thirds_bottom"
+subtitle_display_mode = "word_by_word"
+subtitle_animation = "pop_spring"
+clip_duration = 4
+paragraph_number = 5
+
+[platform]
+hashtags = ["#personalfinance", "#moneytips", "#investing", "#financialliteracy", "#wealthbuilding"]
+
+[monetization]
+primary = "affiliate"
+notes = "Brokerage and budgeting-app referrals pay on signup and need no follower threshold. Ad revenue is the slowest path here, not the first one."
+affiliate_categories = ["brokerage signups", "budgeting apps", "high-yield savings referrals", "credit-score tools"]

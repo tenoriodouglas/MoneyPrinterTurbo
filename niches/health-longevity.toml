@@ -1,0 +1,118 @@
+# High advertiser demand, but this is health information: platforms and
+# advertisers both penalise unsupported claims. Guardrails are strict here
+# by design.
+
+[niche]
+id = "health-longevity"
+name = "Health Habits & Longevity Science"
+language = "en"
+platforms = ["tiktok", "youtube_shorts"]
+
+[economics]
+cpm_low = 10.0
+cpm_high = 18.0
+competition = "high"
+
+[audience]
+description = "30-55 year olds who have read enough health content to be confused, and want the mechanism rather than another list of superfoods."
+pain_points = [
+    "contradictory advice with no way to judge it",
+    "protocols designed for athletes sold to everyone",
+    "no sense of which habits matter most versus marginally",
+    "supplements bought on a claim nobody checked",
+    "starting over every January instead of building",
+]
+
+[content]
+angles = [
+    "mechanism: why a habit works, at the level of the body",
+    "dose-response: the amount where the benefit actually appears",
+    "myth-bust: a popular claim with weaker support than assumed",
+    "priority: the habit that outranks the one people obsess over",
+    "adherence: why the optimal protocol loses to the one you keep",
+    "misread-study: how a headline diverged from what was measured",
+    "cost-benefit: effort versus effect, ranked honestly",
+    "timeline: when a change actually shows up in a measurable marker",
+]
+system_prompt = """
+You write voiceover scripts for a faceless short-form channel about health
+habits and the evidence behind them.
+
+Voice: careful, curious, anti-hype. You explain mechanisms and you are honest
+about uncertainty.
+
+Hard rules:
+- Open on the mechanism or the misconception. No greeting, no channel name.
+- One habit or one claim per script.
+- This is general education, not medical advice. Say so plainly in the script
+  whenever it touches dosing, symptoms, or anything a person might act on
+  medically, and tell people to check with a clinician for their own case.
+- Never diagnose, never prescribe, never promise an outcome, never name a
+  supplement dose as a recommendation.
+- Do not invent studies, sample sizes, effect sizes, or institutions. Describe
+  what is generally understood and say where evidence is mixed or thin. If you
+  are not confident a specific finding is real, describe the mechanism instead
+  of citing a study.
+- Prefer "associated with" over "causes" unless the causal link is
+  uncontroversial.
+- Avoid anything that reads as a cure, a detox, or a miracle.
+- Close with one low-risk, generally-accepted action, stated as an
+  instruction. Never ask for likes, follows, or comments.
+- Plain spoken English. No markdown, no headings, no emoji, no stage
+  directions, no speaker labels. Output only the words to be read aloud.
+"""
+script_guidance = """
+Target 170-210 words, about 65-80 seconds spoken. Stay above one minute.
+Structure: the misconception or mechanism, what is actually understood, where
+the evidence is mixed, the honest size of the effect, one low-risk action plus
+the reminder to check with a clinician.
+"""
+banned_phrases = [
+    "in today's video",
+    "doctors hate this",
+    "this one trick",
+    "boost your immune system",
+    "detox your body",
+    "cure",
+    "miracle",
+    "let's dive in",
+    "big pharma",
+]
+seed_topics = [
+    "why adherence beats the optimal protocol almost every time",
+    "the difference between associated with and causes, using one common claim",
+    "how long a habit takes to show up in a measurable marker",
+    "why protocols built for athletes do not transfer to most people",
+    "the habit that outranks the one most people obsess over",
+]
+visual_terms = [
+    "person running outdoors morning",
+    "healthy food preparation",
+    "sunrise nature landscape",
+    "person sleeping bedroom",
+    "gym workout training",
+    "fresh vegetables market",
+    "walking path forest",
+    "water glass pouring",
+]
+
+[video]
+aspect = "9:16"
+voice_names = [
+    "en-US-AvaNeural",
+    "en-US-BrianNeural",
+    "en-US-EmmaNeural",
+    "en-US-AndrewNeural",
+]
+font_size = 52
+stroke_width = 3.5
+clip_duration = 4
+paragraph_number = 5
+
+[platform]
+hashtags = ["#healthhabits", "#longevity", "#wellness", "#sleep", "#nutrition"]
+
+[monetization]
+primary = "affiliate"
+notes = "Keep to equipment, apps, and books. Supplement affiliates invite the exact claims that get health content demonetised."
+affiliate_categories = ["fitness equipment", "sleep and tracking apps", "books and courses"]
