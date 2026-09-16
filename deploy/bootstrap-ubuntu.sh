@@ -51,15 +51,35 @@ then, in PowerShell:
 
 Reopen the distro, check with `free -h`, and run this script again.
 
-If a previous run was already killed part way, repair the package state first:
+If an earlier run was killed part way through installing packages, do NOT run
+"apt --fix-broken install": it retries the same unpack that ran the host out of
+memory and fails again. Remove the leftovers instead, which needs no memory:
 
-    sudo dpkg --configure -a
-    sudo apt-get -f install
+    sudo dpkg --remove --force-depends build-essential gcc g++ gcc-16 g++-16 \
+        gcc-x86-64-linux-gnu g++-x86-64-linux-gnu \
+        gcc-16-x86-64-linux-gnu g++-16-x86-64-linux-gnu
+    sudo apt-get autoremove -y
+    sudo dpkg --audit          # should print nothing
+
+None of those packages are needed: every Python dependency ships a wheel.
 
 RAMFIX
     exit 1
 fi
 ok "memory: ${TOTAL_MB} MB"
+
+log "Package state"
+# An install killed mid-unpack leaves packages half-configured. apt then tends
+# to propose --fix-broken, which retries the very unpack that failed.
+BROKEN="$(dpkg --audit 2>/dev/null | awk '/^ [a-z0-9]/ {print $1}' | tr '\n' ' ')"
+if [ -n "${BROKEN// /}" ]; then
+    warn "these packages are half-installed from an interrupted run: $BROKEN"
+    warn "if apt fails below, remove them instead of running apt --fix-broken install:"
+    warn "    sudo dpkg --remove --force-depends $BROKEN"
+    warn "    sudo apt-get autoremove -y"
+else
+    ok "no half-installed packages"
+fi
 
 log "System packages"
 # Deliberately small. Every Python dependency installs from a wheel, so no

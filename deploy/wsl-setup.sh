@@ -62,11 +62,17 @@ Then, in PowerShell:
 
 Reopen the distro, confirm with `free -h`, and run this script again.
 
-If an earlier run was killed part way through installing packages, repair the
-package state first:
+If an earlier run was killed part way through installing packages, do NOT run
+"apt --fix-broken install": it retries the same unpack that ran the host out of
+memory and fails again. Remove the leftovers instead, which needs no memory:
 
-    sudo dpkg --configure -a
-    sudo apt-get -f install
+    sudo dpkg --remove --force-depends build-essential gcc g++ gcc-16 g++-16 \
+        gcc-x86-64-linux-gnu g++-x86-64-linux-gnu \
+        gcc-16-x86-64-linux-gnu g++-16-x86-64-linux-gnu
+    sudo apt-get autoremove -y
+    sudo dpkg --audit          # should print nothing
+
+None of those packages are needed: every Python dependency ships a wheel.
 
 RAMFIX
     exit 1

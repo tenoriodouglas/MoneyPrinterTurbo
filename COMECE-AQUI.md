@@ -80,10 +80,20 @@ dependencias Python vem de wheels prontas, entao **nao** e preciso compilador,
 
 ### Se uma tentativa anterior foi morta no meio
 
+**Nao rode `apt --fix-broken install`.** Ele tenta refazer exatamente a
+descompactacao que estourou a memoria, e falha de novo no mesmo ponto. O certo e
+**remover** o que sobrou, o que nao consome memoria:
+
 ```bash
-sudo dpkg --configure -a
-sudo apt-get -f install
+sudo dpkg --remove --force-depends build-essential gcc g++ gcc-16 g++-16 \
+    gcc-x86-64-linux-gnu g++-x86-64-linux-gnu \
+    gcc-16-x86-64-linux-gnu g++-16-x86-64-linux-gnu
+sudo apt-get autoremove -y
+sudo dpkg --audit          # nao deve imprimir nada
 ```
+
+Nenhum desses pacotes e necessario: toda dependencia Python tem wheel pronta.
+Pacotes que ja nao estao instalados so geram aviso, sem erro.
 
 ### O limite que nenhum script resolve
 
