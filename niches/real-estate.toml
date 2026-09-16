@@ -95,8 +95,10 @@ voice_names = [
     "en-US-EricNeural",
     "en-US-EmmaNeural",
 ]
-font_size = 52
+font_size = 72
 stroke_width = 3.5
+subtitle_position = "custom"
+custom_position = 62.0
 clip_duration = 4
 paragraph_number = 5
 

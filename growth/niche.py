@@ -57,11 +57,16 @@ class VideoDefaults:
     voice_names: tuple[str, ...] = ()
     voice_rate: float = 1.0
     font_name: str = "BeVietnamPro-Bold.ttf"
-    font_size: int = 55
+    # Word-by-word captions show one short word at a time, so they need a
+    # much larger size than a full sentence line would.
+    font_size: int = 72
     text_fore_color: str = "#FFFFFF"
     stroke_color: str = "#000000"
     stroke_width: float = 3.0
-    subtitle_position: str = "two_thirds_bottom"
+    # Lower-middle of the frame: below the eye line, above the platform UI
+    # that overlays the bottom fifth of a vertical video.
+    subtitle_position: str = "custom"
+    custom_position: float = 62.0
     subtitle_display_mode: str = "word_by_word"
     subtitle_animation: str = "pop_spring"
     clip_duration: int = 4
@@ -135,6 +140,7 @@ def _build_video_defaults(raw: dict[str, Any]) -> VideoDefaults:
         stroke_color=str(raw.get("stroke_color", defaults.stroke_color)),
         stroke_width=float(raw.get("stroke_width", defaults.stroke_width)),
         subtitle_position=str(raw.get("subtitle_position", defaults.subtitle_position)),
+        custom_position=float(raw.get("custom_position", defaults.custom_position)),
         subtitle_display_mode=str(
             raw.get("subtitle_display_mode", defaults.subtitle_display_mode)
         ),

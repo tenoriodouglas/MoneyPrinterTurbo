@@ -173,7 +173,7 @@ class TestManifestCompatibility(unittest.TestCase):
                     cli._validate_batch_task_params(
                         params,
                         stop_at="video",
-                        custom_position_is_explicit=False,
+                        custom_position_is_explicit="custom_position" in entry,
                         wavespeed_charge_confirmed=False,
                         seedance_charge_confirmed=False,
                         ofox_charge_confirmed=False,
@@ -187,6 +187,18 @@ class TestManifestCompatibility(unittest.TestCase):
         plan_module.assign_voices(briefs, niche, seed=3)
         voices = [brief.voice_name for brief in briefs]
         self.assertEqual(len(set(voices)), min(len(voices), len(niche.video.voice_names)))
+
+    def test_custom_position_is_only_emitted_with_the_custom_mode(self):
+        """The batch validator rejects the field in any other mode."""
+        for niche in load_all_niches():
+            with self.subTest(niche.id):
+                brief = plan_module.parse_briefs(_briefs_json(1), niche, 1)[0]
+                entry = plan_module.to_manifest_entry(brief, niche)
+                if entry["subtitle_position"] == "custom":
+                    self.assertIn("custom_position", entry)
+                    self.assertTrue(0 <= entry["custom_position"] <= 100)
+                else:
+                    self.assertNotIn("custom_position", entry)
 
     def test_aspect_and_length_overrides_reach_the_task(self):
         """The long-form cut is the same pack rendered 16:9 and longer."""
@@ -258,6 +270,21 @@ class TestPlanCreation(unittest.TestCase):
                         "ai-tools", count=1, out_dir=Path(temp) / "batch"
                     )
         self.assertIn("config.toml", str(context.exception))
+
+    def test_provider_error_string_is_surfaced_verbatim(self):
+        """The engine returns provider failures as text, not exceptions."""
+        message = "Error: moonshot: api_key is not set, please set it in the config.toml file."
+        with tempfile.TemporaryDirectory() as temp:
+            with (
+                patch.object(plan_module, "HISTORY_DIR", Path(temp) / "history"),
+                patch("app.services.llm._generate_response", return_value=message),
+            ):
+                with self.assertRaises(plan_module.PlanError) as context:
+                    plan_module.create_plan(
+                        "ai-tools", count=1, out_dir=Path(temp) / "batch"
+                    )
+        self.assertIn("api_key is not set", str(context.exception))
+        self.assertNotIn("JSON array", str(context.exception))
 
     def test_count_must_be_positive(self):
         with self.assertRaises(plan_module.PlanError):

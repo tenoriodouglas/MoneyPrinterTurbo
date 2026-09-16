@@ -99,9 +99,10 @@ voice_names = [
     "en-US-ChristopherNeural",
     "en-US-JennyNeural",
 ]
-font_size = 52
+font_size = 72
 stroke_width = 3.5
-subtitle_position = "two_thirds_bottom"
+subtitle_position = "custom"
+custom_position = 62.0
 subtitle_display_mode = "word_by_word"
 subtitle_animation = "pop_spring"
 clip_duration = 4

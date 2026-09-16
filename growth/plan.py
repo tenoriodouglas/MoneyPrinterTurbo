@@ -264,7 +264,7 @@ def to_manifest_entry(
     rng = random.Random(f"{seed}:{brief.subject}" if seed is not None else None)
     video = niche.video
     terms = list(dict.fromkeys(brief.search_terms + list(niche.visual_terms)))[:8]
-    return {
+    entry: dict[str, Any] = {
         "video_subject": brief.subject,
         "video_script_prompt": brief.script_prompt(niche),
         "custom_system_prompt": niche.system_prompt.strip(),
@@ -296,6 +296,10 @@ def to_manifest_entry(
         "stroke_width": video.stroke_width,
         "n_threads": 2,
     }
+    # The batch validator rejects custom_position unless the mode is custom.
+    if video.subtitle_position == "custom":
+        entry["custom_position"] = video.custom_position
+    return entry
 
 
 def generate_briefs(niche: Niche, count: int, app_config=None) -> list[Brief]:
@@ -305,12 +309,17 @@ def generate_briefs(niche: Niche, count: int, app_config=None) -> list[Brief]:
 
     history = load_history(niche.id)
     prompt = build_prompt(niche, count, history)
-    response = llm._generate_response(prompt, app_config=app_config)
-    if not response or not str(response).strip():
+    response = str(llm._generate_response(prompt, app_config=app_config) or "").strip()
+    if not response:
         raise PlanError(
             "the LLM returned an empty response; check llm_provider and the api key in config.toml"
         )
-    briefs = parse_briefs(str(response), niche, count)
+    # The engine reports provider failures as a plain "Error: ..." string
+    # rather than raising, so an unset api key would otherwise surface here as
+    # an unparseable-JSON error.
+    if response.startswith("Error:"):
+        raise PlanError(response[len("Error:") :].strip())
+    briefs = parse_briefs(response, niche, count)
 
     # The model is told what is already covered, but it is not bound by it.
     known = {_normalize(s) for s in history}
