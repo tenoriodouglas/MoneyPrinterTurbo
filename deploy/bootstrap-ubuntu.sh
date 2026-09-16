@@ -1,16 +1,26 @@
 #!/usr/bin/env bash
-# Prepare a fresh Ubuntu/Debian host (x86 or ARM) to render video batches.
-# Idempotent: safe to re-run. Installs nothing outside apt packages and a venv
+# Prepare a fresh Ubuntu/Debian/Kali host (x86 or ARM) to render video batches.
+# Idempotent: safe to re-run. Installs a small set of apt packages and a venv
 # inside the repository. It never publishes anything.
 set -euo pipefail
 
 REPO_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 VENV_DIR="$REPO_DIR/.venv"
-PYTHON_BIN="${PYTHON_BIN:-python3}"
+
+# Every dependency ships wheels for these, and the app runs on them. 3.14 is
+# rejected on purpose: pydantic fails to build the schema there, which is the
+# default python3 on current Kali.
+PINNED_PYTHON="3.11"
+SUPPORTED_PYTHON="3.11 3.12 3.13"
+
+# A render peaks near 600 MB, and apt itself cannot unpack large packages in
+# much less. Below this the host cannot finish either step.
+MIN_RAM_MB=1200
 
 log() { printf '\n\033[1m==> %s\033[0m\n' "$*"; }
-warn() { printf '\033[33mwarning: %s\033[0m\n' "$*" >&2; }
-die() { printf '\033[31merror: %s\033[0m\n' "$*" >&2; exit 1; }
+ok() { printf '\033[32m  ok\033[0m %s\n' "$*"; }
+warn() { printf '\033[33m  warning\033[0m %s\n' "$*" >&2; }
+die() { printf '\n\033[31merror: %s\033[0m\n' "$*" >&2; exit 1; }
 
 [ "$(id -u)" -eq 0 ] && SUDO="" || SUDO="sudo"
 
@@ -20,36 +30,114 @@ echo "cores:  $(nproc)"
 echo "memory: $(free -h | awk '/^Mem:/ {print $2}')"
 echo "disk:   $(df -h "$REPO_DIR" | awk 'NR==2 {print $4 " free"}')"
 
-# Rendering is CPU bound and moviepy peaks near 600 MB per task; below 2 GB the
-# host will swap through every render instead of failing outright.
 TOTAL_MB="$(free -m | awk '/^Mem:/ {print $2}')"
-if [ "$TOTAL_MB" -lt 1800 ]; then
-    warn "only ${TOTAL_MB} MB of RAM. A render peaks around 600 MB and this host will swap."
-    warn "see docs/HOSPEDAGEM.md: 1 GB free tiers are not usable for this workload."
+if [ "$TOTAL_MB" -lt "$MIN_RAM_MB" ]; then
+    printf '\n\033[31mSTOP: this host has %s MB of RAM. At least %s MB is needed.\033[0m\n' \
+        "$TOTAL_MB" "$MIN_RAM_MB" >&2
+    cat >&2 <<'RAMFIX'
+
+Installing and rendering both fail below this. The package manager gets killed
+mid-unpack by the out-of-memory killer, which leaves a half-configured system.
+
+On WSL, memory is capped by Windows, not by the distro. Create or edit
+C:\Users\<you>\.wslconfig:
+
+    [wsl2]
+    memory=8GB
+
+then, in PowerShell:
+
+    wsl --shutdown
+
+Reopen the distro, check with `free -h`, and run this script again.
+
+If a previous run was already killed part way, repair the package state first:
+
+    sudo dpkg --configure -a
+    sudo apt-get -f install
+
+RAMFIX
+    exit 1
 fi
+ok "memory: ${TOTAL_MB} MB"
 
 log "System packages"
+# Deliberately small. Every Python dependency installs from a wheel, so no
+# compiler, no python3-dev and no build-essential: that set is ~450 MB of
+# downloads and is what runs a low-memory host out of RAM.
 $SUDO apt-get update -qq
-$SUDO apt-get install -y --no-install-recommends \
-    ffmpeg git curl ca-certificates \
-    python3 python3-venv python3-dev build-essential
+$SUDO apt-get install -y --no-install-recommends ffmpeg git curl ca-certificates
 
 command -v ffmpeg >/dev/null || die "ffmpeg did not install; nothing can render without it"
 echo "ffmpeg: $(ffmpeg -version | head -1)"
 
-log "Python environment"
-if [ ! -d "$VENV_DIR" ]; then
-    "$PYTHON_BIN" -m venv "$VENV_DIR"
+log "Python"
+
+python_is_supported() {
+    local candidate="$1" version
+    command -v "$candidate" >/dev/null 2>&1 || return 1
+    version="$("$candidate" -c 'import sys; print("%d.%d" % sys.version_info[:2])' 2>/dev/null)" || return 1
+    case " $SUPPORTED_PYTHON " in
+        *" $version "*) echo "$version"; return 0 ;;
+        *) return 1 ;;
+    esac
+}
+
+UV_BIN="$(command -v uv || true)"
+[ -z "$UV_BIN" ] && [ -x "$HOME/.local/bin/uv" ] && UV_BIN="$HOME/.local/bin/uv"
+
+SYSTEM_VERSION="$(python_is_supported python3 || true)"
+
+if [ -z "$UV_BIN" ] && [ -z "$SYSTEM_VERSION" ]; then
+    SYSTEM_RAW="$(python3 -c 'import sys; print("%d.%d" % sys.version_info[:2])' 2>/dev/null || echo none)"
+    warn "python3 is $SYSTEM_RAW; this project needs one of: $SUPPORTED_PYTHON"
+    if [ "${SKIP_UV_INSTALL:-0}" = "1" ]; then
+        die "set up a supported Python yourself, or unset SKIP_UV_INSTALL to let uv fetch $PINNED_PYTHON"
+    fi
+    echo "  installing uv (astral.sh) to fetch a standalone Python $PINNED_PYTHON"
+    curl -LsSf https://astral.sh/uv/install.sh | sh
+    UV_BIN="$HOME/.local/bin/uv"
+    [ -x "$UV_BIN" ] || die "uv installation failed; install a supported Python manually"
 fi
-# A venv created by uv has no pip, so bootstrap one before installing.
-"$VENV_DIR/bin/python" -m pip --version >/dev/null 2>&1 || \
-    "$VENV_DIR/bin/python" -m ensurepip --upgrade >/dev/null 2>&1 || \
-    die "no pip in $VENV_DIR and ensurepip failed; delete the directory and re-run"
-"$VENV_DIR/bin/python" -m pip install --quiet --upgrade pip
-# Retries because package mirrors time out more often than they fail outright.
-"$VENV_DIR/bin/python" -m pip install --quiet --retries 5 --timeout 90 \
-    -r "$REPO_DIR/requirements.txt"
-echo "python: $("$VENV_DIR/bin/python" --version)"
+
+if [ ! -d "$VENV_DIR" ]; then
+    if [ -n "$UV_BIN" ]; then
+        # uv downloads a standalone interpreter, so the distro's python3 version
+        # does not matter.
+        "$UV_BIN" venv --python "$PINNED_PYTHON" "$VENV_DIR"
+    else
+        $SUDO apt-get install -y --no-install-recommends python3-venv
+        python3 -m venv "$VENV_DIR"
+    fi
+fi
+
+VENV_VERSION="$("$VENV_DIR/bin/python" -c 'import sys; print("%d.%d" % sys.version_info[:2])')"
+case " $SUPPORTED_PYTHON " in
+    *" $VENV_VERSION "*) ok "python: $("$VENV_DIR/bin/python" --version)" ;;
+    *) die "the venv at $VENV_DIR is Python $VENV_VERSION, which this project does not support ($SUPPORTED_PYTHON). Delete it and re-run." ;;
+esac
+
+log "Dependencies"
+install_deps() {
+    if [ -n "$UV_BIN" ]; then
+        UV_HTTP_TIMEOUT=180 "$UV_BIN" pip install --python "$VENV_DIR/bin/python" "$@" \
+            -r "$REPO_DIR/requirements.txt"
+    else
+        "$VENV_DIR/bin/python" -m ensurepip --upgrade >/dev/null 2>&1 || true
+        "$VENV_DIR/bin/python" -m pip install --quiet --retries 5 --timeout 90 "$@" \
+            -r "$REPO_DIR/requirements.txt"
+    fi
+}
+
+# Wheels only on the first attempt: if one is missing, fail fast and say so
+# rather than starting a source build that needs compilers this script did not
+# install.
+if ! install_deps --only-binary=:all:; then
+    warn "a dependency has no prebuilt wheel for this platform; retrying with source builds"
+    warn "if that fails, install compilers: sudo apt-get install -y build-essential python3-dev"
+    install_deps
+fi
+ok "dependencies installed"
 
 log "Configuration"
 if [ ! -f "$REPO_DIR/config.toml" ]; then
@@ -65,9 +153,8 @@ log "Checks"
 cd "$REPO_DIR"
 "$VENV_DIR/bin/python" -m growth niches
 
-MISSING=0
-grep -qE '^\s*pexels_api_keys\s*=\s*\[\s*"' config.toml || { warn "pexels_api_keys is empty in config.toml"; MISSING=1; }
-grep -qE '^\s*llm_provider\s*=' config.toml || { warn "llm_provider is not set in config.toml"; MISSING=1; }
+grep -qE '^\s*pexels_api_keys\s*=\s*\[\s*"' config.toml || warn "pexels_api_keys is empty in config.toml"
+grep -qE '^\s*llm_provider\s*=' config.toml || warn "llm_provider is not set in config.toml"
 
 cat <<'NEXT'
 
@@ -84,5 +171,3 @@ Then try one video end to end:
 To render every morning without logging in:
   deploy/install-timer.sh ai-tools 3
 NEXT
-
-[ "$MISSING" -eq 1 ] && exit 0 || exit 0

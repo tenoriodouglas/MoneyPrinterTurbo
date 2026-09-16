@@ -28,7 +28,17 @@ fica acima disso — trate 10 min/vídeo como piso, não como média.
 - **CPU**: é o único gargalo. Render é ffmpeg, puro CPU.
 - **GPU**: não é necessária. Só entra se você usar geração de vídeo por IA ou
   transcrição Whisper em modelo grande.
-- **RAM**: ~600 MB por render. 1 GB é apertado, 2 GB já é confortável.
+- **RAM**: **mínimo real de 1,2 GB**, e o `deploy/bootstrap-ubuntu.sh` para de
+  propósito abaixo disso. Não é só o render (que tem pico de ~600 MB): com
+  menos que isso o próprio gerenciador de pacotes leva OOM kill no meio da
+  descompactação e deixa o sistema meio configurado. 2 GB é confortável.
+- **Python**: **3.11, 3.12 ou 3.13**. Em **3.14 o pydantic quebra** ao montar o
+  schema, então o bootstrap recusa essa versão. Isso importa porque 3.14 já é o
+  `python3` padrão de distros rolling como o Kali; nesse caso o script usa `uv`
+  para baixar um Python 3.11 independente da distro.
+- **Compilador**: não é preciso. Toda dependência tem wheel pronta, então o
+  bootstrap não instala `build-essential` nem `python3-dev` — esse conjunto são
+  ~450 MB de download e 1,5 GB em disco, à toa.
 - **Disco**: cache de material + saídas. 30–50 GB dá conta com folga.
 - **Banda**: download de material é entrada (grátis em todo provedor); upload
   dos vídeos é ~5 MB cada.

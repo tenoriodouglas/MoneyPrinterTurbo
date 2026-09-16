@@ -31,8 +31,28 @@ O vídeo sai em `storage/growth/out/<nicho>/<data>/`, junto de um
 
 ## No WSL (Windows)
 
+**Antes de tudo, confira a memoria.** O WSL nao herda a RAM da maquina: o
+Windows impoe um teto, e o padrao pode ser uma fracao pequena. Abaixo de
+~1,2 GB nem o `apt` consegue descompactar pacotes — ele leva OOM kill no meio e
+deixa o sistema meio configurado.
+
 ```bash
-# Dentro do WSL. O diretorio precisa ser do Linux, nunca /mnt/c
+free -h   # se "total" estiver abaixo de 1,2Gi, corrija antes de continuar
+```
+
+Para corrigir, crie ou edite `C:\Users\<voce>\.wslconfig` no Windows:
+
+```ini
+[wsl2]
+memory=8GB
+```
+
+Depois, no PowerShell: `wsl --shutdown`. Reabra a distro e confira com `free -h`.
+
+Com memoria suficiente:
+
+```bash
+# O diretorio precisa ser do Linux, nunca /mnt/c
 cd ~
 git clone -b claude/blissful-lamport-2qe81i \
   https://github.com/tenoriodouglas/MoneyPrinterTurbo.git
@@ -40,24 +60,39 @@ cd MoneyPrinterTurbo
 deploy/wsl-setup.sh
 ```
 
-O `wsl-setup.sh` confere as tres coisas que o WSL faz diferente de um servidor
-e que quebram o render, depois chama o bootstrap normal:
+### O que o script trata
 
-1. **Nunca deixe o repo em `/mnt/c`.** O render faz muita escrita e leitura de
-   arquivos pequenos, e nesse caminho tudo passa por uma camada de traducao
-   para o filesystem do Windows. Em `~` fica no disco ext4 do proprio WSL.
-2. **Memoria.** O WSL2 limita o que enxerga. Abaixo de 1,8 GB o render entra em
-   swap — o script avisa e mostra como corrigir no `.wslconfig`.
-3. **systemd desligado.** Sem ele o timer nao instala. O
-   `deploy/install-timer.sh` detecta isso e cai para cron sozinho.
+1. **Memoria.** Para com instrucao clara se estiver abaixo do minimo, em vez de
+   deixar o `apt` morrer no meio.
+2. **Caminho.** Repo em `/mnt/c` passa por uma camada de traducao para o
+   filesystem do Windows, e o render faz muita I/O de arquivo pequeno. Em `~`
+   fica no disco ext4 do proprio WSL.
+3. **Versao do Python.** O projeto roda em **3.11, 3.12 ou 3.13**. Em **3.14 o
+   pydantic quebra** — e 3.14 e o `python3` padrao do Kali rolling. Se o
+   `python3` do sistema nao servir, o script usa o `uv` para baixar um Python
+   3.11 independente da distro.
+4. **systemd desligado.** Sem ele o timer nao instala. O
+   `deploy/install-timer.sh` detecta e cai para cron sozinho.
 
-**O agendamento no WSL tem um limite real:** timer ou cron dentro do WSL so
-disparam enquanto o Windows esta ligado e a distro rodando. Para um lote que
-roda de verdade sem voce, agende pelo Windows:
+O bootstrap instala so `ffmpeg`, `git`, `curl` e `ca-certificates`. Todas as
+dependencias Python vem de wheels prontas, entao **nao** e preciso compilador,
+`build-essential` nem `python3-dev`.
+
+### Se uma tentativa anterior foi morta no meio
+
+```bash
+sudo dpkg --configure -a
+sudo apt-get -f install
+```
+
+### O limite que nenhum script resolve
+
+Timer ou cron **dentro** do WSL so disparam enquanto o Windows esta ligado e a
+distro rodando. Para um lote que roda de verdade sem voce, agende pelo Windows:
 
 ```
 Agendador de Tarefas -> Criar Tarefa -> Acao:
-wsl.exe -d Ubuntu -- bash -lc "cd ~/MoneyPrinterTurbo && .venv/bin/python -m growth run ai-tools --count 3"
+wsl.exe -d kali-linux -- bash -lc "cd ~/MoneyPrinterTurbo && .venv/bin/python -m growth run ai-tools --count 3"
 ```
 
 ## O que configurar

@@ -41,12 +41,38 @@ case "$REPO_DIR" in
         ;;
 esac
 
+# Below this neither apt nor a render can finish, so stop here rather than
+# letting the out-of-memory killer interrupt a half-finished install.
+MIN_RAM_MB=1200
 TOTAL_MB="$(free -m | awk '/^Mem:/ {print $2}')"
-if [ "$TOTAL_MB" -lt 1800 ]; then
-    warn "WSL sees only ${TOTAL_MB} MB of RAM; a render peaks near 600 MB and this will swap."
-    warn "Raise it in C:\\Users\\<you>\\.wslconfig, then run 'wsl --shutdown' in PowerShell:"
-    warn "    [wsl2]"
-    warn "    memory=4GB"
+if [ "$TOTAL_MB" -lt "$MIN_RAM_MB" ]; then
+    printf '\n\033[31mSTOP: WSL sees only %s MB of RAM. At least %s MB is needed.\033[0m\n' \
+        "$TOTAL_MB" "$MIN_RAM_MB" >&2
+    cat >&2 <<'RAMFIX'
+
+WSL memory is capped by Windows, not by the distro, and the default can be a
+small fraction of the machine. Create or edit C:\Users\<you>\.wslconfig:
+
+    [wsl2]
+    memory=8GB
+
+Then, in PowerShell:
+
+    wsl --shutdown
+
+Reopen the distro, confirm with `free -h`, and run this script again.
+
+If an earlier run was killed part way through installing packages, repair the
+package state first:
+
+    sudo dpkg --configure -a
+    sudo apt-get -f install
+
+RAMFIX
+    exit 1
+elif [ "$TOTAL_MB" -lt 2048 ]; then
+    warn "WSL sees ${TOTAL_MB} MB of RAM; a render peaks near 600 MB, so this is tight."
+    warn "Raise it with memory=8GB in C:\\Users\\<you>\\.wslconfig, then 'wsl --shutdown'."
     BLOCKERS=1
 else
     ok "memory available to WSL: ${TOTAL_MB} MB"
