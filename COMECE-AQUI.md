@@ -40,14 +40,32 @@ deixa o sistema meio configurado.
 free -h   # se "total" estiver abaixo de 1,2Gi, corrija antes de continuar
 ```
 
-Para corrigir, crie ou edite `C:\Users\<voce>\.wslconfig` no Windows:
+Para corrigir sem editar nada a mao, **de dentro do WSL**:
+
+```bash
+deploy/wsl-configure-memory.sh
+```
+
+Ele acha o seu perfil do Windows sozinho, le quanta RAM a maquina tem, reserva
+metade para o WSL e escreve o `.wslconfig` no lugar certo. Se ja existir um, faz
+backup e **mescla** em vez de sobrescrever, entao configuracoes suas nao se
+perdem. Use `--dry-run` para so ver o que ele faria, ou `--memory 6GB` para
+escolher o valor.
+
+Escrever o arquivo por ali evita os dois jeitos de errar isso na mao: o Bloco de
+Notas salvando como `.wslconfig.txt`, e o arquivo indo parar fora de
+`C:\Users\<voce>\`.
+
+Depois, no **PowerShell** (nao no WSL): `wsl --shutdown`. Reabra a distro e
+confira com `free -h`.
+
+Se preferir fazer pelo Windows, o conteudo minimo do arquivo e:
 
 ```ini
 [wsl2]
 memory=8GB
+swap=2GB
 ```
-
-Depois, no PowerShell: `wsl --shutdown`. Reabra a distro e confira com `free -h`.
 
 Com memoria suficiente:
 
