@@ -29,6 +29,37 @@ nano config.toml
 O vídeo sai em `storage/growth/out/<nicho>/<data>/`, junto de um
 `captions.txt` com a legenda e as hashtags prontas para publicar.
 
+## No WSL (Windows)
+
+```bash
+# Dentro do WSL. O diretorio precisa ser do Linux, nunca /mnt/c
+cd ~
+git clone -b claude/blissful-lamport-2qe81i \
+  https://github.com/tenoriodouglas/MoneyPrinterTurbo.git
+cd MoneyPrinterTurbo
+deploy/wsl-setup.sh
+```
+
+O `wsl-setup.sh` confere as tres coisas que o WSL faz diferente de um servidor
+e que quebram o render, depois chama o bootstrap normal:
+
+1. **Nunca deixe o repo em `/mnt/c`.** O render faz muita escrita e leitura de
+   arquivos pequenos, e nesse caminho tudo passa por uma camada de traducao
+   para o filesystem do Windows. Em `~` fica no disco ext4 do proprio WSL.
+2. **Memoria.** O WSL2 limita o que enxerga. Abaixo de 1,8 GB o render entra em
+   swap — o script avisa e mostra como corrigir no `.wslconfig`.
+3. **systemd desligado.** Sem ele o timer nao instala. O
+   `deploy/install-timer.sh` detecta isso e cai para cron sozinho.
+
+**O agendamento no WSL tem um limite real:** timer ou cron dentro do WSL so
+disparam enquanto o Windows esta ligado e a distro rodando. Para um lote que
+roda de verdade sem voce, agende pelo Windows:
+
+```
+Agendador de Tarefas -> Criar Tarefa -> Acao:
+wsl.exe -d Ubuntu -- bash -lc "cd ~/MoneyPrinterTurbo && .venv/bin/python -m growth run ai-tools --count 3"
+```
+
 ## O que configurar
 
 | Item | Custo | Onde |
