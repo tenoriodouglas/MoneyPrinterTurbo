@@ -132,6 +132,10 @@ def _summarise_provider_error(message: str) -> tuple[str, str]:
         return detail, fix
 
     short = text[:140]
+    # The model name is the one detail worth keeping past the cut, whatever
+    # kind of failure this is.
+    if model and model not in short:
+        short = f"{short} (model {model})"
     return short, "check the api key, model name and base url for this provider"
 
 
