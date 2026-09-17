@@ -14,6 +14,7 @@ import json
 import sys
 from pathlib import Path
 
+from growth.doctor import FAIL, OK, WARN, run_checks
 from growth.niche import NicheError, load_all_niches
 from growth.plan import PlanError, create_plan
 from growth.produce import LEDGER_PATH, ProduceError, produce
@@ -57,6 +58,27 @@ def _cmd_niches(args: argparse.Namespace) -> int:
         "\nCPM is what advertisers pay per 1000 monetised views; RPM is your share.\n"
         "Neither applies until the channel is accepted into a partner programme."
     )
+    return 0
+
+
+def _cmd_doctor(args: argparse.Namespace) -> int:
+    results = run_checks(skip_network=args.skip_network)
+    marks = {OK: "\033[32m  ok  \033[0m", WARN: "\033[33m warn \033[0m", FAIL: "\033[31m FAIL \033[0m"}
+    print()
+    for check in results:
+        print(f"[{marks[check.status]}] {check.name:<12} {check.detail}")
+        if check.fix and check.status != OK:
+            print(f"{'':>21}-> {check.fix}")
+    failed = [c for c in results if c.status == FAIL]
+    warned = [c for c in results if c.status == WARN]
+    print()
+    if failed:
+        print(f"{len(failed)} check(s) failed; fix those before running a batch")
+        return 1
+    if warned:
+        print(f"ready to render, with {len(warned)} warning(s)")
+    else:
+        print("ready to render:  python -m growth run ai-tools --count 1")
     return 0
 
 
@@ -131,6 +153,16 @@ def main(argv: list[str] | None = None) -> int:
         description="Plan and render batches of niche videos on the render engine.",
     )
     subparsers = parser.add_subparsers(dest="command", required=True)
+
+    doctor = subparsers.add_parser(
+        "doctor", help="check this machine and config before rendering"
+    )
+    doctor.add_argument(
+        "--skip-network",
+        action="store_true",
+        help="only run local checks, no provider calls",
+    )
+    doctor.set_defaults(func=_cmd_doctor)
 
     listing = subparsers.add_parser("niches", help="list niche packs by earning profile")
     listing.add_argument("--json", action="store_true", help="machine readable output")

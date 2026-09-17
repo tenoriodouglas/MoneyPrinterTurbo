@@ -134,9 +134,22 @@ wsl.exe -d kali-linux -- bash -lc "cd ~/MoneyPrinterTurbo && .venv/bin/python -m
 
 Só o LLM custa dinheiro, e é o único item sem alternativa gratuita completa.
 
+Depois de preencher as chaves, confirme tudo de uma vez:
+
+```bash
+.venv/bin/python -m growth doctor
+```
+
+Ele testa de verdade: faz uma chamada minima ao LLM, uma busca real de material e
+uma sintese curta de voz. Cada falha vem com o que fazer. Sai com codigo 1 se
+algo estiver quebrado, entao serve para portao em script.
+
 ## Os comandos
 
 ```bash
+# Conferir maquina e config ANTES de gastar um render
+python -m growth doctor
+
 # Listar nichos ordenados por retorno estimado
 python -m growth niches
 
