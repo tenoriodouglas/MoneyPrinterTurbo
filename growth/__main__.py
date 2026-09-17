@@ -121,7 +121,12 @@ def _cmd_plan(args: argparse.Namespace) -> int:
 
 
 def _cmd_produce(args: argparse.Namespace) -> int:
-    result = produce(Path(args.plan_dir), stop_at=args.stop_at, timeout=args.timeout)
+    result = produce(
+        Path(args.plan_dir),
+        stop_at=args.stop_at,
+        timeout=args.timeout,
+        quiet=args.quiet,
+    )
     print(f"rendered {result['succeeded']}/{result['total']} videos")
     for record in result["records"]:
         mark = "ok  " if record["status"] == "succeeded" else "FAIL"
@@ -142,7 +147,10 @@ def _cmd_run(args: argparse.Namespace) -> int:
     )
     print(f"planned {plan['count']} videos for {plan['niche_name']}")
     result = produce(
-        Path(plan["plan_file"]).parent, stop_at="video", timeout=args.timeout
+        Path(plan["plan_file"]).parent,
+        stop_at="video",
+        timeout=args.timeout,
+        quiet=args.quiet,
     )
     print(f"rendered {result['succeeded']}/{result['total']} videos")
     for record in result["records"]:
@@ -229,6 +237,9 @@ def main(argv: list[str] | None = None) -> int:
         help="stop the pipeline early, for dry runs",
     )
     producing.add_argument("--timeout", type=int, default=6 * 60 * 60)
+    producing.add_argument(
+        "--quiet", action="store_true", help="hide the engine's render log"
+    )
     producing.set_defaults(func=_cmd_produce)
 
     running = subparsers.add_parser("run", help="plan and render in one step")
@@ -238,6 +249,9 @@ def main(argv: list[str] | None = None) -> int:
     running.add_argument("--aspect", choices=["9:16", "16:9", "1:1"], default=None)
     running.add_argument("--paragraphs", type=int, default=None)
     running.add_argument("--timeout", type=int, default=6 * 60 * 60)
+    running.add_argument(
+        "--quiet", action="store_true", help="hide the engine's render log"
+    )
     running.set_defaults(func=_cmd_run)
 
     ledger = subparsers.add_parser("ledger", help="show what has been produced")

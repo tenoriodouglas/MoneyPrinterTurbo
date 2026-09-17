@@ -3,6 +3,7 @@ import sys
 import tempfile
 import unittest
 from pathlib import Path
+import unittest.mock
 from unittest.mock import patch
 
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))
@@ -289,6 +290,80 @@ class TestPlanCreation(unittest.TestCase):
     def test_count_must_be_positive(self):
         with self.assertRaises(plan_module.PlanError):
             plan_module.create_plan("ai-tools", count=0)
+
+
+class TestRunBatch(unittest.TestCase):
+    """A render takes minutes; a terminal with no output looks like a hang."""
+
+    def _fake_process(self, stdout="", returncode=0):
+        process = unittest.mock.MagicMock()
+        process.communicate.return_value = (stdout, None)
+        process.returncode = returncode
+        return process
+
+    def _run(self, manifest, **kwargs):
+        summary = json.dumps({"total": 1, "succeeded": 1, "failed": 0, "tasks": []})
+        with patch(
+            "growth.produce.subprocess.Popen",
+            return_value=self._fake_process(summary),
+        ) as popen:
+            result = produce_module.run_batch(manifest, **kwargs)
+        return result, popen
+
+    def test_engine_log_reaches_the_terminal_by_default(self):
+        with tempfile.TemporaryDirectory() as temp:
+            manifest = Path(temp) / "manifest.jsonl"
+            manifest.write_text("{}\n", encoding="utf-8")
+            _, popen = self._run(manifest)
+        self.assertIsNone(popen.call_args.kwargs["stderr"])
+
+    def test_quiet_captures_the_engine_log(self):
+        with tempfile.TemporaryDirectory() as temp:
+            manifest = Path(temp) / "manifest.jsonl"
+            manifest.write_text("{}\n", encoding="utf-8")
+            _, popen = self._run(manifest, quiet=True)
+        self.assertEqual(
+            popen.call_args.kwargs["stderr"], produce_module.subprocess.PIPE
+        )
+
+    def test_summary_is_read_from_stdout(self):
+        with tempfile.TemporaryDirectory() as temp:
+            manifest = Path(temp) / "manifest.jsonl"
+            manifest.write_text("{}\n", encoding="utf-8")
+            result, _ = self._run(manifest)
+        self.assertEqual(result["succeeded"], 1)
+
+    def test_rejected_manifest_raises_rather_than_returning_nothing(self):
+        with tempfile.TemporaryDirectory() as temp:
+            manifest = Path(temp) / "manifest.jsonl"
+            manifest.write_text("{}\n", encoding="utf-8")
+            with patch(
+                "growth.produce.subprocess.Popen",
+                return_value=self._fake_process("", returncode=2),
+            ):
+                with self.assertRaises(produce_module.ProduceError):
+                    produce_module.run_batch(manifest)
+
+    def test_timeout_kills_the_render(self):
+        """Left alone, a stuck ffmpeg would hold the machine indefinitely."""
+        process = unittest.mock.MagicMock()
+        process.communicate.side_effect = [
+            produce_module.subprocess.TimeoutExpired(cmd="cli.py", timeout=1),
+            ("", None),
+        ]
+        with tempfile.TemporaryDirectory() as temp:
+            manifest = Path(temp) / "manifest.jsonl"
+            manifest.write_text("{}\n", encoding="utf-8")
+            with patch("growth.produce.subprocess.Popen", return_value=process):
+                with self.assertRaises(produce_module.ProduceError):
+                    produce_module.run_batch(manifest, timeout=1)
+        process.kill.assert_called_once()
+
+    def test_missing_manifest_is_reported_before_starting_anything(self):
+        with patch("growth.produce.subprocess.Popen") as popen:
+            with self.assertRaises(produce_module.ProduceError):
+                produce_module.run_batch(Path("/nonexistent/manifest.jsonl"))
+        popen.assert_not_called()
 
 
 class TestCollectResults(unittest.TestCase):

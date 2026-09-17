@@ -64,8 +64,12 @@ def run_batch(
     manifest: Path,
     stop_at: str = "video",
     timeout: int = DEFAULT_TIMEOUT_SECONDS,
+    quiet: bool = False,
 ) -> dict[str, Any]:
-    """Invoke the render CLI on a manifest and return its JSON summary."""
+    """Invoke the render CLI on a manifest and return its JSON summary.
+
+    quiet captures the engine's log instead of letting it reach the terminal.
+    """
     if not manifest.is_file():
         raise ProduceError(f"manifest not found: {manifest}")
     command = [
@@ -76,27 +80,42 @@ def run_batch(
         "--stop-at",
         stop_at,
     ]
+    # The engine logs progress to stderr and prints only its JSON summary on
+    # stdout. Capturing both leaves the terminal silent for the length of a
+    # render, which is indistinguishable from a hang. Let stderr through and
+    # capture stdout alone.
+    stderr_target = subprocess.PIPE if quiet else None
     try:
-        completed = subprocess.run(
+        process = subprocess.Popen(
             command,
             cwd=REPO_ROOT,
-            capture_output=True,
+            stdout=subprocess.PIPE,
+            stderr=stderr_target,
             text=True,
-            timeout=timeout,
-            check=False,
         )
+    except OSError as exc:
+        raise ProduceError(f"could not start the render CLI: {exc}") from exc
+
+    try:
+        stdout, stderr = process.communicate(timeout=timeout)
     except subprocess.TimeoutExpired as exc:
+        process.kill()
+        process.communicate()
         raise ProduceError(f"batch timed out after {timeout}s") from exc
 
     # Exit 1 means some tasks failed but a summary was still printed; exit 2
     # means the manifest was rejected before anything ran and there is none.
-    if completed.returncode == 2 or not completed.stdout.strip():
+    if process.returncode == 2 or not (stdout or "").strip():
+        detail = _diagnostics(stderr, stdout)
+        if not quiet:
+            # Its log went straight to the terminal, so point there instead of
+            # claiming there was no output.
+            detail = detail if detail != "(no output)" else "see the log above"
         raise ProduceError(
-            f"batch did not produce a summary (exit {completed.returncode}):\n"
-            + _diagnostics(completed.stderr, completed.stdout)
+            f"batch did not produce a summary (exit {process.returncode}):\n{detail}"
         )
     try:
-        return json.loads(completed.stdout.strip().splitlines()[-1])
+        return json.loads(stdout.strip().splitlines()[-1])
     except (json.JSONDecodeError, IndexError) as exc:
         raise ProduceError(f"could not parse batch summary: {exc}") from exc
 
@@ -171,6 +190,7 @@ def produce(
     plan_dir: Path,
     stop_at: str = "video",
     timeout: int = DEFAULT_TIMEOUT_SECONDS,
+    quiet: bool = False,
 ) -> dict[str, Any]:
     """Render a plan directory end to end and record the results."""
     plan_file = plan_dir / "plan.json"
@@ -178,7 +198,7 @@ def produce(
     if not plan_file.is_file():
         raise ProduceError(f"plan.json not found in {plan_dir}")
 
-    summary = run_batch(manifest, stop_at=stop_at, timeout=timeout)
+    summary = run_batch(manifest, stop_at=stop_at, timeout=timeout, quiet=quiet)
     records = collect(plan_file, summary)
     append_ledger(records)
 
