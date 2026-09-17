@@ -166,12 +166,49 @@ def _check_llm() -> Check:
     return Check("llm", OK, f"{provider} responded in {elapsed:.1f}s")
 
 
-def _check_materials() -> Check:
+def _check_generated_images() -> Check:
+    """Generate one real image, because a misconfigured endpoint only shows up
+    several minutes into a render otherwise."""
+    import tempfile
+
     from app.config import config
     from app.models.schema import VideoAspect
     from app.services import material
 
-    source = str(config.app.get("video_source", "pexels")).strip() or "pexels"
+    if not material.is_openai_image_enabled():
+        return Check(
+            "materials", FAIL, "the image endpoint is not configured",
+            "apply a pack's style: python -m growth config --niche <id> --image-key <key>",
+        )
+    model = str(config.app.get("openai_image_model", "")).strip()
+    try:
+        with tempfile.TemporaryDirectory() as temp:
+            items = material.generate_images_openai(
+                search_term="a lone figure in a moonlit field looking up at the sky",
+                minimum_duration=3,
+                video_aspect=VideoAspect.portrait,
+                save_dir=temp,
+            )
+    except Exception as exc:
+        detail, fix = _summarise_provider_error(str(exc))
+        return Check("materials", FAIL, f"{model}: {detail}", fix)
+    if not items:
+        return Check(
+            "materials", FAIL, f"{model} returned no image",
+            "check openai_image_base_url, the model name and the api key",
+        )
+    return Check("materials", OK, f"{model} generated {len(items)} image")
+
+
+def _check_materials(source: str | None = None) -> Check:
+    from app.config import config
+    from app.models.schema import VideoAspect
+    from app.services import material
+
+    source = (source or str(config.app.get("video_source", "pexels"))).strip() or "pexels"
+    if source == "openai_image":
+        return _check_generated_images()
+
     searchers = {
         "pexels": ("pexels_api_keys", material.search_videos_pexels),
         "pixabay": ("pixabay_api_keys", material.search_videos_pixabay),
@@ -231,14 +268,28 @@ _LOCAL_CHECKS = (_check_python, _check_ffmpeg, _check_disk, _check_config, _chec
 _NETWORK_CHECKS = (_check_llm, _check_materials, _check_voice)
 
 
-def run_checks(skip_network: bool = False) -> list[Check]:
+def run_checks(skip_network: bool = False, niche_id: str | None = None) -> list[Check]:
+    """Run every check, optionally against the material source a pack uses.
+
+    A pack sets its own video_source per task, so checking the global default
+    would test a provider the batch is never going to call.
+    """
+    source: str | None = None
+    if niche_id:
+        from growth.niche import load_niche
+
+        source = load_niche(niche_id).video.video_source
+
     checks = list(_LOCAL_CHECKS)
     if not skip_network:
         checks += list(_NETWORK_CHECKS)
     results: list[Check] = []
     for check in checks:
         try:
-            results.append(check())
+            if check is _check_materials:
+                results.append(check(source))
+            else:
+                results.append(check())
         except Exception as exc:  # a broken check must not hide the others
             results.append(Check(check.__name__, FAIL, f"check itself failed: {exc}"[:150]))
     return results

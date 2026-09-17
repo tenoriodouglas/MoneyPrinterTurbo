@@ -274,6 +274,7 @@ def to_manifest_entry(
         "video_aspect": aspect or video.aspect,
         "video_source": video.video_source,
         "video_concat_mode": "random",
+        "match_materials_to_script": video.match_materials_to_script,
         # Varying transition and clip length keeps consecutive uploads from
         # sharing an identical visual rhythm.
         "video_transition_mode": rng.choice(_TRANSITIONS),

@@ -1,0 +1,146 @@
+# Entertainment rates, not finance rates: advertisers pay far less per view
+# here. What this niche has instead is retention and shareability, and it is
+# the one pack where generated illustration beats stock footage outright,
+# because no stock library holds "three lights hanging over a Phoenix suburb".
+
+[niche]
+id = "ufo-sightings"
+name = "UFO Sighting Reports"
+language = "en"
+platforms = ["tiktok", "youtube_shorts"]
+
+[economics]
+cpm_low = 3.0
+cpm_high = 8.0
+competition = "medium"
+
+[audience]
+description = "People who find the documented cases more interesting than the theories: the radar tapes, the pilot testimony, the files that took thirty years to declassify."
+pain_points = [
+    "channels that assert aliens as settled fact and lose all credibility",
+    "the same five cases retold with no new detail",
+    "stock footage of nothing while a narrator describes something specific",
+    "no separation between what a witness said and what was verified",
+    "endings that promise answers and deliver a subscribe prompt",
+]
+
+[content]
+angles = [
+    "single-case: one documented sighting, told start to finish",
+    "witness-testimony: what the people on the ground actually reported",
+    "official-record: what the file said, and what the file left out",
+    "radar-and-instrument: the cases with hard data, not just eyes",
+    "mass-sighting: an event many people saw at once, and what they agreed on",
+    "explained-later: a famous case that turned out to have an answer",
+    "still-open: the specific detail that no explanation has covered",
+    "investigator: the person who looked into it and what they concluded",
+]
+system_prompt = """
+You write voiceover scripts for a faceless short-form channel about documented
+UFO sighting reports.
+
+Voice: a careful storyteller. You build the scene, you attribute every claim,
+and you leave the conclusion to the listener.
+
+Hard rules:
+- Open in the scene: a place, a time, a person, and what they saw. No greeting,
+  no channel name, no "have you ever wondered".
+- One sighting per script. Never a countdown of cases.
+- Attribute everything. "The pilot reported", "the radar operator described",
+  "the declassified memo stated". Never assert as fact what a witness claimed.
+- Never state that a craft was extraterrestrial. The honest line is that the
+  object was not identified, and you say exactly that.
+- Give concrete anchors: the date, the place, how many witnesses, how long it
+  lasted, what instruments recorded. Those details are the whole appeal.
+- Include the official explanation where one was offered, and say plainly
+  whether it accounted for what witnesses described.
+- Close on the specific detail that remains unexplained, or on the explanation
+  that resolved it. Never ask for likes, follows, or comments.
+- Plain spoken English. No markdown, no headings, no emoji, no stage
+  directions, no speaker labels. Output only the words to be read aloud.
+
+Accuracy rules, which matter more here than anywhere:
+- Only well-documented public cases. Never invent a sighting, a witness, a
+  place name, a date, a case number or a document.
+- If you are not confident a detail is real, leave it out. A shorter script
+  with solid detail beats a longer one with an invented one.
+- Do not name living private individuals. Public figures who testified on the
+  record, and long-reported case names, are fine.
+- Never imply a cover-up you cannot attribute to a specific public record.
+"""
+script_guidance = """
+Target 180-220 words, which reads as 70-85 seconds of speech. TikTok pays only
+above one minute, so do not come in short.
+Structure: the scene and the moment it started, what the witnesses described,
+what instruments or officials recorded, the explanation that was offered, and
+the detail it did not cover.
+"""
+banned_phrases = [
+    "in today's video",
+    "have you ever wondered",
+    "what happened next will shock you",
+    "the government doesn't want you to know",
+    "aliens are real",
+    "proof of extraterrestrial life",
+    "you won't believe",
+    "let's dive in",
+    "smoking gun",
+]
+seed_topics = [
+    "a mass sighting many people reported at the same hour",
+    "a case where radar and pilots reported the same object",
+    "a famous sighting that a later investigation explained",
+    "a declassified file and the detail it left unaddressed",
+    "what a group of witnesses agreed on, and where they differed",
+]
+# Scene descriptions, not keywords: the image model draws what it is told, so
+# these describe a frame rather than a topic.
+visual_terms = [
+    "a lone figure standing in a moonlit desert field looking up at the sky",
+    "three glowing lights hovering in formation above a suburban street at night",
+    "a 1950s radar room with operators watching a green screen",
+    "an airline cockpit at night with pilots looking through the windscreen",
+    "a small town main street at dusk with people pointing upward",
+    "a military file folder stamped and open on a wooden desk",
+    "a farmhouse silhouetted against a sky with an unexplained glow",
+    "a highway at night with a bright light following a car",
+]
+
+[video]
+aspect = "9:16"
+# Illustration generated from the script, not stock footage searched by
+# keyword: it is the only way the picture matches what is being narrated.
+video_source = "openai_image"
+match_materials_to_script = true
+voice_names = [
+    "en-US-ChristopherNeural",
+    "en-US-BrianNeural",
+    "en-US-AriaNeural",
+    "en-US-AndrewNeural",
+]
+voice_rate = 0.95
+font_size = 72
+stroke_width = 3.5
+subtitle_position = "custom"
+custom_position = 62.0
+subtitle_display_mode = "word_by_word"
+subtitle_animation = "pop_spring"
+clip_duration = 5
+paragraph_number = 6
+bgm_volume = 0.18
+
+[images]
+# Pollinations exposes an OpenAI-compatible image endpoint and its Flux model
+# is free, which is what makes an illustrated pack viable at zero cost.
+base_url = "https://gen.pollinations.ai/v1"
+model = "flux"
+# One template across every video is what gives the channel a look of its own.
+prompt_template = "retro 2D cartoon illustration of {term}, bold black outlines, flat muted colour palette, 1970s comic book style, dramatic night lighting, grainy paper texture, cinematic composition, no text, no lettering"
+
+[platform]
+hashtags = ["#ufo", "#uap", "#sighting", "#unexplained", "#declassified"]
+
+[monetization]
+primary = "affiliate"
+notes = "Ad rates here are entertainment-tier, well below finance. The return comes from retention and volume, and from books, documentaries and merchandise rather than from CPM."
+affiliate_categories = ["books and documentaries", "streaming referrals", "merchandise"]

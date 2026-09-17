@@ -141,6 +141,8 @@ def build_updates(
     provider: str | None = None,
     provider_key: str | None = None,
     provider_model: str | None = None,
+    niche: str | None = None,
+    image_key: str | None = None,
 ) -> dict[str, str | list[str]]:
     """Validate the requested changes and map them to config keys."""
     updates: dict[str, str | list[str]] = {}
@@ -170,8 +172,32 @@ def build_updates(
             # so an explicit name has to be settable without editing the file.
             updates[f"{name}_model_name"] = clean_key(provider_model, f"{name} model")
 
+    if image_key and not niche:
+        raise ConfigError("--image-key needs --niche to say which style it serves")
+
+    if niche:
+        # The engine reads image settings from global config rather than from
+        # the task, so a pack that wants generated visuals has to publish its
+        # style here before a batch runs.
+        from growth.niche import load_niche
+
+        pack = load_niche(niche.strip())
+        if not pack.images.configured:
+            raise ConfigError(
+                f"niche {pack.id!r} does not declare [images]; only packs that "
+                "generate their visuals need this"
+            )
+        updates["openai_image_base_url"] = pack.images.base_url
+        updates["openai_image_model"] = pack.images.model
+        if pack.images.size:
+            updates["openai_image_size"] = pack.images.size
+        if pack.images.prompt_template:
+            updates["openai_image_prompt_template"] = pack.images.prompt_template
+        if image_key:
+            updates["openai_image_api_keys"] = [clean_key(image_key, "image")]
+
     if not updates:
         raise ConfigError(
-            "nothing to set; pass --pexels, --llm, --llm-key or --llm-model"
+            "nothing to set; pass --pexels, --llm, --llm-key, --llm-model or --niche"
         )
     return updates

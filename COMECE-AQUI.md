@@ -208,6 +208,7 @@ material de banco de imagens:
 | `ai-tools` | 8–20 | média | afiliados |
 | `health-longevity` | 10–18 | alta | afiliados |
 | `real-estate` | 10–16 | média | geração de leads |
+| `ufo-sightings` | 3–8 | média | afiliados |
 
 **Para começar, `ai-tools` ou `b2b-software`.** Não são os de CPM mais alto,
 mas são os de menor concorrência — e num canal novo a concorrência importa
@@ -217,6 +218,31 @@ Cada pack define o nicho, a voz editorial, os ângulos que revezam entre vídeos
 frases proibidas, termos de busca de material, vozes de narração e como aquele
 nicho ganha dinheiro. Criar um nicho novo é copiar um `.toml` e editar — não
 mexe em código.
+
+### Imagem gerada em vez de banco de imagens
+
+Buscar clipe em banco por palavra-chave traz material genérico: a voz descreve
+uma coisa e a tela mostra outra. O pack `ufo-sightings` não busca nada — ele
+**gera cada cena a partir do roteiro**, no mesmo estilo de desenho em todos os
+vídeos, o que também dá identidade visual ao canal.
+
+```bash
+# Aplica o estilo do pack (chave gratuita em https://enter.pollinations.ai/)
+python -m growth config --niche ufo-sightings --image-key SUA_CHAVE
+
+# Confere o endpoint de imagem antes de gastar um render
+python -m growth doctor --niche ufo-sightings
+
+python -m growth run ufo-sightings --count 1
+```
+
+Custa zero: o modelo Flux do Pollinations é gratuito e o endpoint é compatível
+com OpenAI. Para dar esse tratamento a outro nicho, copie a seção `[images]` do
+pack de UFO e ajuste o `prompt_template` — ele precisa conter `{term}`.
+
+**Atenção ao trocar de nicho:** `openai_image_*` são configurações globais do
+app, não por tarefa. Rodar `--niche` de novo troca o estilo ativo, então rode
+um nicho ilustrado de cada vez.
 
 ## Por que não é só "gerar 10 vídeos por dia"
 

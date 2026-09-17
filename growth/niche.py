@@ -74,6 +74,30 @@ class VideoDefaults:
     bgm_volume: float = 0.12
     paragraph_number: int = 4
     video_source: str = "pexels"
+    # Stock search returns clips for the subject as a whole, so footage for a
+    # later point can appear while an earlier one is still being narrated.
+    # Matching to the script orders the terms by the narration instead.
+    match_materials_to_script: bool = True
+
+
+@dataclass(frozen=True, slots=True)
+class ImageStyle:
+    """Generated-visual settings for a pack that does not use stock footage.
+
+    These map to the engine's global ``openai_image_*`` config, which any
+    OpenAI-compatible image endpoint satisfies. The prompt template is what
+    makes a pack look like one channel rather than a stock-footage reel: the
+    same illustration style is applied to every scene the script describes.
+    """
+
+    base_url: str = ""
+    model: str = ""
+    size: str = ""
+    prompt_template: str = ""
+
+    @property
+    def configured(self) -> bool:
+        return bool(self.base_url and self.model)
 
 
 @dataclass(frozen=True, slots=True)
@@ -96,6 +120,7 @@ class Niche:
     hashtags: tuple[str, ...]
     monetization: dict[str, Any] = field(default_factory=dict)
     video: VideoDefaults = field(default_factory=VideoDefaults)
+    images: ImageStyle = field(default_factory=ImageStyle)
 
     @property
     def score(self) -> float:
@@ -152,7 +177,24 @@ def _build_video_defaults(raw: dict[str, Any]) -> VideoDefaults:
         bgm_volume=float(raw.get("bgm_volume", defaults.bgm_volume)),
         paragraph_number=int(raw.get("paragraph_number", defaults.paragraph_number)),
         video_source=str(raw.get("video_source", defaults.video_source)),
+        match_materials_to_script=bool(
+            raw.get("match_materials_to_script", defaults.match_materials_to_script)
+        ),
     )
+
+
+def _build_image_style(raw: dict[str, Any]) -> ImageStyle:
+    style = ImageStyle(
+        base_url=str(raw.get("base_url", "")).strip(),
+        model=str(raw.get("model", "")).strip(),
+        size=str(raw.get("size", "")).strip(),
+        prompt_template=str(raw.get("prompt_template", "")).strip(),
+    )
+    if style.prompt_template and "{term}" not in style.prompt_template:
+        raise NicheError("[images].prompt_template must contain the {term} placeholder")
+    if (style.base_url or style.model) and not style.configured:
+        raise NicheError("[images] needs both base_url and model, or neither")
+    return style
 
 
 def parse_niche(data: dict[str, Any], source: str = "<memory>") -> Niche:
@@ -205,6 +247,7 @@ def parse_niche(data: dict[str, Any], source: str = "<memory>") -> Niche:
             hashtags=tuple(data.get("platform", {}).get("hashtags", [])),
             monetization=dict(data.get("monetization", {})),
             video=_build_video_defaults(data.get("video", {})),
+            images=_build_image_style(data.get("images", {})),
         )
     except NicheError as exc:
         raise NicheError(f"{source}: {exc}") from exc

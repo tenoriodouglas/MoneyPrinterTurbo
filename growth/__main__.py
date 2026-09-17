@@ -70,6 +70,8 @@ def _cmd_config(args: argparse.Namespace) -> int:
         provider=args.llm,
         provider_key=args.llm_key,
         provider_model=args.llm_model,
+        niche=args.niche,
+        image_key=args.image_key,
     )
     backup = apply_updates(updates)
     print("updated config.toml:")
@@ -84,7 +86,7 @@ def _cmd_config(args: argparse.Namespace) -> int:
 
 
 def _cmd_doctor(args: argparse.Namespace) -> int:
-    results = run_checks(skip_network=args.skip_network)
+    results = run_checks(skip_network=args.skip_network, niche_id=args.niche)
     marks = {OK: "\033[32m  ok  \033[0m", WARN: "\033[33m warn \033[0m", FAIL: "\033[31m FAIL \033[0m"}
     print()
     for check in results:
@@ -220,6 +222,13 @@ def main(argv: list[str] | None = None) -> int:
         "--llm-model",
         help="explicit model name; needed when the provider default is not on your plan",
     )
+    configure.add_argument(
+        "--niche",
+        help="apply this pack's generated-image style, for packs that declare one",
+    )
+    configure.add_argument(
+        "--image-key", help="api key for the image endpoint given by --niche"
+    )
     configure.set_defaults(func=_cmd_config)
 
     doctor = subparsers.add_parser(
@@ -229,6 +238,11 @@ def main(argv: list[str] | None = None) -> int:
         "--skip-network",
         action="store_true",
         help="only run local checks, no provider calls",
+    )
+    doctor.add_argument(
+        "--niche",
+        default=None,
+        help="check the material source this pack uses, not the global default",
     )
     doctor.set_defaults(func=_cmd_doctor)
 
