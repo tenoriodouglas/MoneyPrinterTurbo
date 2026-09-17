@@ -98,6 +98,14 @@ class TestBuildUpdates(unittest.TestCase):
         self.assertEqual(updates["llm_provider"], "gemini")
         self.assertEqual(updates["gemini_api_key"], "abc")
 
+    def test_model_name_is_set_alongside_the_provider(self):
+        updates = build_updates(provider="gemini", provider_model="gemini-3.1-flash-lite")
+        self.assertEqual(updates["gemini_model_name"], "gemini-3.1-flash-lite")
+
+    def test_model_without_a_provider_is_rejected(self):
+        with self.assertRaises(ConfigError):
+            build_updates(provider_model="gemini-3.1-flash-lite")
+
     def test_unknown_provider_is_rejected_with_the_known_list(self):
         with self.assertRaises(ConfigError) as context:
             build_updates(provider="not-a-provider", provider_key="abc")

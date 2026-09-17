@@ -140,6 +140,7 @@ def build_updates(
     pixabay: str | None = None,
     provider: str | None = None,
     provider_key: str | None = None,
+    provider_model: str | None = None,
 ) -> dict[str, str | list[str]]:
     """Validate the requested changes and map them to config keys."""
     updates: dict[str, str | list[str]] = {}
@@ -149,8 +150,10 @@ def build_updates(
     if pixabay:
         updates["pixabay_api_keys"] = [clean_key(pixabay, "pixabay")]
 
-    if provider_key and not provider:
-        raise ConfigError("--llm-key needs --llm to say which provider it belongs to")
+    if (provider_key or provider_model) and not provider:
+        raise ConfigError(
+            "--llm-key and --llm-model need --llm to say which provider they belong to"
+        )
 
     if provider:
         from app.models.llm_provider import LLM_PROVIDERS
@@ -162,7 +165,13 @@ def build_updates(
         updates["llm_provider"] = name
         if provider_key:
             updates[f"{name}_api_key"] = clean_key(provider_key, name)
+        if provider_model:
+            # Registry defaults can point at a model the account cannot call,
+            # so an explicit name has to be settable without editing the file.
+            updates[f"{name}_model_name"] = clean_key(provider_model, f"{name} model")
 
     if not updates:
-        raise ConfigError("nothing to set; pass --pexels, --llm or --llm-key")
+        raise ConfigError(
+            "nothing to set; pass --pexels, --llm, --llm-key or --llm-model"
+        )
     return updates

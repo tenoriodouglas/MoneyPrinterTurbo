@@ -9,6 +9,7 @@ runs every one of them in a few seconds instead, before a batch is started.
 
 from __future__ import annotations
 
+import re
 import shutil
 import subprocess
 import sys
@@ -101,6 +102,39 @@ def _check_fonts() -> Check:
     return Check("fonts", OK, "every pack's font is present")
 
 
+def _summarise_provider_error(message: str) -> tuple[str, str]:
+    """Reduce a provider error to what the user can act on.
+
+    Providers answer failures with a full JSON dump. Truncating it blindly
+    drops the two fields that matter - the model being called and whether the
+    plan allows it - and leaves advice that points at the api key instead.
+    """
+    text = " ".join(str(message).split())
+    model = ""
+    match = re.search(r"model:\s*([A-Za-z0-9._-]+)", text)
+    if match:
+        model = match.group(1)
+
+    quota = "RESOURCE_EXHAUSTED" in text or "429" in text or "quota" in text.lower()
+    if quota:
+        # limit: 0 means the plan has no allowance for that model at all,
+        # which is a different problem from having used the allowance up.
+        no_allowance = re.search(r"limit:\s*0\b", text) is not None
+        detail = f"quota rejected for model {model or 'the configured model'}"
+        if no_allowance:
+            fix = (
+                f"your plan has no free quota for {model or 'this model'}; "
+                "switch to one it allows, e.g. "
+                "python -m growth config --llm gemini --llm-model gemini-3.1-flash-lite"
+            )
+        else:
+            fix = "the per-minute or daily quota is spent; wait, or use a smaller model"
+        return detail, fix
+
+    short = text[:140]
+    return short, "check the api key, model name and base url for this provider"
+
+
 def _check_llm() -> Check:
     from app.config import config
     from app.services import llm
@@ -120,12 +154,11 @@ def _check_llm() -> Check:
     try:
         succeeded, error, elapsed = llm.test_connection()
     except Exception as exc:  # any provider SDK may raise its own type
-        return Check("llm", FAIL, f"{provider}: {exc}".strip()[:150])
+        detail, fix = _summarise_provider_error(str(exc))
+        return Check("llm", FAIL, f"{provider}: {detail}", fix)
     if not succeeded:
-        return Check(
-            "llm", FAIL, f"{provider}: {error}"[:150],
-            "check the api key, model name and base url for this provider",
-        )
+        detail, fix = _summarise_provider_error(error)
+        return Check("llm", FAIL, f"{provider}: {detail}", fix)
     return Check("llm", OK, f"{provider} responded in {elapsed:.1f}s")
 
 

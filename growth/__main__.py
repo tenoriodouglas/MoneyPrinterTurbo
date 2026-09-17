@@ -68,6 +68,7 @@ def _cmd_config(args: argparse.Namespace) -> int:
         pixabay=args.pixabay,
         provider=args.llm,
         provider_key=args.llm_key,
+        provider_model=args.llm_model,
     )
     backup = apply_updates(updates)
     print("updated config.toml:")
@@ -181,6 +182,10 @@ def main(argv: list[str] | None = None) -> int:
     configure.add_argument("--pixabay", help="pixabay api key")
     configure.add_argument("--llm", help="llm provider id, e.g. gemini")
     configure.add_argument("--llm-key", help="api key for the provider given by --llm")
+    configure.add_argument(
+        "--llm-model",
+        help="explicit model name; needed when the provider default is not on your plan",
+    )
     configure.set_defaults(func=_cmd_config)
 
     doctor = subparsers.add_parser(

@@ -86,6 +86,41 @@ class TestLlmCheck(unittest.TestCase):
         self.assertIn("boom", result.detail)
 
 
+class TestProviderErrorSummary(unittest.TestCase):
+    """A provider dumps JSON on failure; the fix depends on two fields in it."""
+
+    QUOTA_NO_ALLOWANCE = (
+        "429 RESOURCE_EXHAUSTED. {'error': {'code': 429, 'message': 'You exceeded "
+        "your current quota. * Quota exceeded for metric: generate_content_free_tier"
+        "_requests, limit: 0, model: gemini-3.1-pro'}}"
+    )
+
+    def test_plan_without_allowance_names_the_model_and_the_switch(self):
+        detail, fix = doctor._summarise_provider_error(self.QUOTA_NO_ALLOWANCE)
+        self.assertIn("gemini-3.1-pro", detail)
+        self.assertIn("no free quota", fix)
+        self.assertIn("--llm-model", fix)
+
+    def test_spent_quota_is_not_reported_as_a_plan_problem(self):
+        detail, fix = doctor._summarise_provider_error(
+            "429 RESOURCE_EXHAUSTED quota exceeded, limit: 15, model: gemini-3.1-flash-lite"
+        )
+        self.assertIn("gemini-3.1-flash-lite", detail)
+        self.assertIn("quota is spent", fix)
+        self.assertNotIn("no free quota", fix)
+
+    def test_other_errors_keep_their_message(self):
+        detail, fix = doctor._summarise_provider_error("API key not valid.")
+        self.assertIn("API key not valid", detail)
+        self.assertIn("api key", fix)
+
+    def test_the_model_name_survives_a_long_dump(self):
+        """Blind truncation used to cut exactly the part that names the fix."""
+        noisy = "x" * 400 + " limit: 0, model: gemini-3.1-pro " + "y" * 400
+        detail, _ = doctor._summarise_provider_error(noisy)
+        self.assertIn("gemini-3.1-pro", detail)
+
+
 class TestMaterialsCheck(unittest.TestCase):
     def test_missing_key_fails_with_where_to_get_one(self):
         with patch("app.config.config.app", {"video_source": "pexels"}):
