@@ -74,6 +74,9 @@ class VideoDefaults:
     bgm_volume: float = 0.12
     paragraph_number: int = 4
     video_source: str = "pexels"
+    # How long the narration is expected to run. A generating source needs one
+    # term per clip to cover it; 0 leaves the stock default of a few terms.
+    target_seconds: int = 0
     # Stock search returns clips for the subject as a whole, so footage for a
     # later point can appear while an earlier one is still being narrated.
     # Matching to the script orders the terms by the narration instead.
@@ -177,6 +180,7 @@ def _build_video_defaults(raw: dict[str, Any]) -> VideoDefaults:
         bgm_volume=float(raw.get("bgm_volume", defaults.bgm_volume)),
         paragraph_number=int(raw.get("paragraph_number", defaults.paragraph_number)),
         video_source=str(raw.get("video_source", defaults.video_source)),
+        target_seconds=int(raw.get("target_seconds", defaults.target_seconds)),
         match_materials_to_script=bool(
             raw.get("match_materials_to_script", defaults.match_materials_to_script)
         ),

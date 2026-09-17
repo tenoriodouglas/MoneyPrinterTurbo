@@ -25,6 +25,14 @@ TIKTOK_MIN_SECONDS = 60.0
 # Speech below this rate usually means the script ran short and the render was
 # padded out, which reads as slow rather than as substantial.
 MIN_WORDS_PER_MINUTE = 100
+# Mean luma below this is a frame with no picture in it. Limited-range video
+# bottoms out at 16, and the darkest night scene measured in an illustrated
+# pack sits at 53, so the gap is wide.
+BLACK_LEVEL = 24.0
+# One frame every this many seconds, sampled in a single decode pass.
+SAMPLE_EVERY_SECONDS = 8
+# One blank frame could be a transition; a quarter of them is a broken render.
+MAX_BLACK_FRACTION = 0.25
 
 OK = "ok"
 WARN = "warn"
@@ -40,6 +48,7 @@ class VideoReview:
     width: int = 0
     height: int = 0
     words: int = 0
+    black: float = 0.0
     issues: list[tuple[str, str]] = field(default_factory=list)
 
     @property
@@ -76,6 +85,39 @@ def probe(path: Path) -> tuple[float, int, int]:
         return duration, int(stream.get("width", 0)), int(stream.get("height", 0))
     except (subprocess.SubprocessError, OSError, ValueError, json.JSONDecodeError):
         return 0.0, 0, 0
+
+
+def black_fraction(path: Path, duration: float) -> float:
+    """Share of the running time that carries no picture.
+
+    A generating source stops when its prompts run out rather than when the
+    narration is covered, so a video can come out the right length with its
+    tail black. Duration, orientation and script all still look correct, which
+    is why this has to be measured.
+
+    blackdetect scans the whole file in one decode pass, which is both faster
+    and more truthful than sampling frames: sampling reports whatever moments
+    it happens to land on, and seeking to a timestamp lands on a keyframe near
+    it rather than on it.
+    """
+    if duration <= 0:
+        return 0.0
+    try:
+        result = subprocess.run(
+            [
+                "ffmpeg", "-i", str(path), "-an",
+                "-vf", f"fps=1/{SAMPLE_EVERY_SECONDS},signalstats,"
+                       "metadata=print:key=lavfi.signalstats.YAVG",
+                "-f", "null", "-",
+            ],
+            capture_output=True, text=True, timeout=300, check=False,
+        )
+    except (subprocess.SubprocessError, OSError):
+        return 0.0
+    levels = [float(value) for value in re.findall(r"YAVG=([0-9.]+)", result.stderr)]
+    if not levels:
+        return 0.0
+    return sum(1 for level in levels if level < BLACK_LEVEL) / len(levels)
 
 
 def read_script(subtitle_path: str | Path) -> str:
@@ -131,6 +173,14 @@ def review_record(record: dict) -> list[VideoReview]:
             review.issues.append((FAIL, "duration could not be read; the file may be truncated"))
             reviews.append(review)
             continue
+
+        review.black = black_fraction(path, review.duration)
+        if review.black > MAX_BLACK_FRACTION:
+            review.issues.append((
+                FAIL,
+                f"{review.black:.0%} of the video has no picture; "
+                "the material ran out before the narration did",
+            ))
 
         if "tiktok" in platforms and review.duration < TIKTOK_MIN_SECONDS:
             short_by = TIKTOK_MIN_SECONDS - review.duration

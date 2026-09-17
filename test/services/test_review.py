@@ -63,8 +63,10 @@ class TestBannedPhrases(unittest.TestCase):
 
 class TestReviewRecord(unittest.TestCase):
     def _review_with_probe(self, record, duration, width=1080, height=1920):
+        # Blankness has its own tests; stub it so these cover only their subject.
         with patch.object(review_module, "probe", return_value=(duration, width, height)):
-            return review_record(record)
+            with patch.object(review_module, "black_fraction", return_value=0.0):
+                return review_record(record)
 
     def test_video_under_a_minute_fails_for_tiktok(self):
         """Under 60s the Creator Rewards programme pays nothing at all."""
@@ -142,6 +144,54 @@ class TestReviewRecord(unittest.TestCase):
             reviews = self._review_with_probe(_record(files=[str(video)]), 0.0)
         self.assertEqual(reviews[0].status, FAIL)
         self.assertIn("truncated", reviews[0].issues[0][1])
+
+
+class TestBlackDetection(unittest.TestCase):
+    """A render can come out the right length with no picture in it, and every
+    other check still passes."""
+
+    def _video(self, directory: Path, name: str, filter_spec: str, seconds: int) -> Path:
+        path = directory / name
+        subprocess.run(
+            ["ffmpeg", "-f", "lavfi", "-i", f"{filter_spec}:s=320x568:d={seconds}:r=15",
+             "-c:v", "libx264", "-pix_fmt", "yuv420p", str(path), "-y"],
+            capture_output=True, check=True,
+        )
+        return path
+
+    @unittest.skipUnless(
+        subprocess.run(["which", "ffmpeg"], capture_output=True).returncode == 0,
+        "ffmpeg is not available",
+    )
+    def test_an_all_black_video_is_measured_as_blank(self):
+        with tempfile.TemporaryDirectory() as temp:
+            path = self._video(Path(temp), "black.mp4", "color=c=black", 24)
+            self.assertGreater(review_module.black_fraction(path, 24.0), 0.9)
+
+    @unittest.skipUnless(
+        subprocess.run(["which", "ffmpeg"], capture_output=True).returncode == 0,
+        "ffmpeg is not available",
+    )
+    def test_a_video_with_picture_is_not_flagged(self):
+        with tempfile.TemporaryDirectory() as temp:
+            path = self._video(Path(temp), "grey.mp4", "color=c=gray", 24)
+            self.assertEqual(review_module.black_fraction(path, 24.0), 0.0)
+
+    def test_zero_duration_is_not_divided_by(self):
+        self.assertEqual(review_module.black_fraction(Path("/nope.mp4"), 0.0), 0.0)
+
+    def test_a_blank_video_fails_review(self):
+        with tempfile.TemporaryDirectory() as temp:
+            video = Path(temp) / "v.mp4"
+            video.write_bytes(b"x")
+            srt = Path(temp) / "s.srt"
+            srt.write_text(SRT * 20, encoding="utf-8")
+            record = _record(files=[str(video)], subtitle_path=str(srt))
+            with patch.object(review_module, "probe", return_value=(72.0, 1080, 1920)):
+                with patch.object(review_module, "black_fraction", return_value=0.6):
+                    reviews = review_record(record)
+        self.assertEqual(reviews[0].status, FAIL)
+        self.assertIn("no picture", reviews[0].issues[0][1])
 
 
 class TestProbe(unittest.TestCase):

@@ -13,6 +13,7 @@ import json
 import re
 import shutil
 import subprocess
+import time
 import sys
 from datetime import datetime, timezone
 from pathlib import Path
@@ -60,6 +61,31 @@ def _caption(brief: dict[str, Any], niche_hashtags: list[str]) -> str:
     return f"{body}\n\n{tags}".strip()
 
 
+def _tee_stdout(process: subprocess.Popen, timeout: int) -> tuple[str, str | None]:
+    """Echo the engine's output as it arrives and keep it for the summary.
+
+    Reading line by line rather than with communicate() is what makes a render
+    visible while it runs; the deadline is enforced per line, so a stalled
+    engine is still killed rather than waited on forever.
+    """
+    deadline = time.monotonic() + timeout
+    collected: list[str] = []
+    assert process.stdout is not None
+    try:
+        for line in process.stdout:
+            collected.append(line.rstrip("\n"))
+            print(line, end="", file=sys.stderr, flush=True)
+            if time.monotonic() > deadline:
+                raise subprocess.TimeoutExpired(cmd="cli.py", timeout=timeout)
+        remaining = max(1, int(deadline - time.monotonic()))
+        process.wait(timeout=remaining)
+    except subprocess.TimeoutExpired as exc:
+        process.kill()
+        process.wait()
+        raise ProduceError(f"batch timed out after {timeout}s") from exc
+    return "\n".join(collected), None
+
+
 def run_batch(
     manifest: Path,
     stop_at: str = "video",
@@ -80,10 +106,11 @@ def run_batch(
         "--stop-at",
         stop_at,
     ]
-    # The engine logs progress to stderr and prints only its JSON summary on
-    # stdout. Capturing both leaves the terminal silent for the length of a
-    # render, which is indistinguishable from a hang. Let stderr through and
-    # capture stdout alone.
+    # The engine installs its own log sink on stdout and prints its JSON
+    # summary there too, so stdout has to be captured to find the summary and
+    # echoed to keep the render visible. Letting stderr through alone leaves
+    # the terminal silent for the length of a render and throws away the log
+    # that explains any failure.
     stderr_target = subprocess.PIPE if quiet else None
     try:
         process = subprocess.Popen(
@@ -92,16 +119,20 @@ def run_batch(
             stdout=subprocess.PIPE,
             stderr=stderr_target,
             text=True,
+            bufsize=1,
         )
     except OSError as exc:
         raise ProduceError(f"could not start the render CLI: {exc}") from exc
 
-    try:
-        stdout, stderr = process.communicate(timeout=timeout)
-    except subprocess.TimeoutExpired as exc:
-        process.kill()
-        process.communicate()
-        raise ProduceError(f"batch timed out after {timeout}s") from exc
+    if quiet:
+        try:
+            stdout, stderr = process.communicate(timeout=timeout)
+        except subprocess.TimeoutExpired as exc:
+            process.kill()
+            process.communicate()
+            raise ProduceError(f"batch timed out after {timeout}s") from exc
+    else:
+        stdout, stderr = _tee_stdout(process, timeout)
 
     # Exit 1 means some tasks failed but a summary was still printed; exit 2
     # means the manifest was rejected before anything ran and there is none.

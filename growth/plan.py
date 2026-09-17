@@ -13,6 +13,7 @@ manifest (strict VideoParams, for `cli.py --batch-file`).
 from __future__ import annotations
 
 import json
+import math
 import random
 import re
 from dataclasses import asdict, dataclass
@@ -247,6 +248,26 @@ def assign_voices(briefs: list[Brief], niche: Niche, seed: int | None = None) ->
         brief.voice_name = voices[position % len(voices)]
 
 
+def _build_terms(brief: Brief, niche: Niche, clip_seconds: int) -> list[str]:
+    """Choose how many search terms a task carries.
+
+    A stock source returns many clips per term, so a handful of terms is
+    plenty. A generating source returns exactly one image per term and stops
+    when the terms run out, whether or not the narration is covered: too few
+    terms leaves the tail of the video black. Supply one term per clip the
+    audio will need, cycling the available scenes when there are not enough
+    distinct ones, since each generation of the same scene differs anyway.
+    """
+    unique = list(dict.fromkeys(brief.search_terms + list(niche.visual_terms)))
+    if not niche.video.target_seconds:
+        return unique[:8]
+
+    needed = math.ceil(niche.video.target_seconds / max(clip_seconds, 1)) + 1
+    if len(unique) >= needed:
+        return unique[:needed]
+    return [unique[index % len(unique)] for index in range(needed)]
+
+
 def to_manifest_entry(
     brief: Brief,
     niche: Niche,
@@ -263,7 +284,8 @@ def to_manifest_entry(
     """
     rng = random.Random(f"{seed}:{brief.subject}" if seed is not None else None)
     video = niche.video
-    terms = list(dict.fromkeys(brief.search_terms + list(niche.visual_terms)))[:8]
+    clip_seconds = rng.choice([video.clip_duration, video.clip_duration + 1])
+    terms = _build_terms(brief, niche, clip_seconds)
     entry: dict[str, Any] = {
         "video_subject": brief.subject,
         "video_script_prompt": brief.script_prompt(niche),
@@ -278,9 +300,9 @@ def to_manifest_entry(
         # Varying transition and clip length keeps consecutive uploads from
         # sharing an identical visual rhythm.
         "video_transition_mode": rng.choice(_TRANSITIONS),
-        "video_clip_duration": rng.choice(
-            [video.clip_duration, video.clip_duration + 1]
-        ),
+        # The same length the term count was sized against, or the tail of the
+        # video would come up short of the narration again.
+        "video_clip_duration": clip_seconds,
         "video_count": 1,
         "voice_name": brief.voice_name or (video.voice_names[0] if video.voice_names else ""),
         "voice_rate": video.voice_rate,

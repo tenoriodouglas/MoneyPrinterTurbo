@@ -105,6 +105,42 @@ class TestScriptMatching(unittest.TestCase):
         self.assertFalse(niche.video.match_materials_to_script)
 
 
+class TestTermSizing(unittest.TestCase):
+    """A generating source makes one image per term and stops when the terms
+    run out, so the term count decides how much of the narration has a
+    picture."""
+
+    def test_a_generating_pack_gets_a_term_per_clip(self):
+        niche = load_niche("ufo-sightings")
+        brief = parse_briefs(BRIEF, niche, 1)[0]
+        entry = to_manifest_entry(brief, niche, seed=1)
+        covered = len(entry["video_terms"]) * entry["video_clip_duration"]
+        self.assertGreaterEqual(covered, niche.video.target_seconds)
+
+    def test_terms_cycle_when_there_are_not_enough_distinct_scenes(self):
+        niche = load_niche("ufo-sightings")
+        brief = parse_briefs(BRIEF, niche, 1)[0]
+        entry = to_manifest_entry(brief, niche, seed=1)
+        available = len(set(brief.search_terms) | set(niche.visual_terms))
+        self.assertGreater(len(entry["video_terms"]), available)
+
+    def test_a_stock_pack_keeps_a_small_term_list(self):
+        """Stock search returns many clips per term, so more terms buy nothing."""
+        niche = load_niche("ai-tools")
+        brief = parse_briefs(BRIEF, niche, 1)[0]
+        entry = to_manifest_entry(brief, niche, seed=1)
+        self.assertLessEqual(len(entry["video_terms"]), 8)
+
+    def test_clip_length_matches_what_the_terms_were_sized_for(self):
+        niche = load_niche("ufo-sightings")
+        brief = parse_briefs(BRIEF, niche, 1)[0]
+        for seed in range(5):
+            with self.subTest(seed=seed):
+                entry = to_manifest_entry(brief, niche, seed=seed)
+                covered = len(entry["video_terms"]) * entry["video_clip_duration"]
+                self.assertGreaterEqual(covered, niche.video.target_seconds)
+
+
 class TestImageStyleValidation(unittest.TestCase):
     def test_template_without_the_placeholder_is_rejected(self):
         with self.assertRaises(NicheError) as context:

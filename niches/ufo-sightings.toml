@@ -111,6 +111,11 @@ aspect = "9:16"
 # Illustration generated from the script, not stock footage searched by
 # keyword: it is the only way the picture matches what is being narrated.
 video_source = "openai_image"
+# The generator makes one image per search term and stops when the terms run
+# out, covered narration or not. This is how many seconds of narration the
+# term count has to cover; a little above the script's own target so the tail
+# is never short.
+target_seconds = 100
 match_materials_to_script = true
 voice_names = [
     "en-US-ChristopherNeural",

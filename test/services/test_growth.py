@@ -1,3 +1,4 @@
+import io
 import json
 import sys
 import tempfile
@@ -296,8 +297,12 @@ class TestRunBatch(unittest.TestCase):
     """A render takes minutes; a terminal with no output looks like a hang."""
 
     def _fake_process(self, stdout="", returncode=0):
+        """The streaming path reads stdout line by line, so a stub has to be
+        iterable as well as answer communicate() for the quiet path."""
         process = unittest.mock.MagicMock()
+        process.stdout = iter(stdout.splitlines(keepends=True))
         process.communicate.return_value = (stdout, None)
+        process.wait.return_value = returncode
         process.returncode = returncode
         return process
 
@@ -344,8 +349,24 @@ class TestRunBatch(unittest.TestCase):
                 with self.assertRaises(produce_module.ProduceError):
                     produce_module.run_batch(manifest)
 
-    def test_timeout_kills_the_render(self):
+    def test_timeout_kills_the_render_when_streaming(self):
         """Left alone, a stuck ffmpeg would hold the machine indefinitely."""
+        process = unittest.mock.MagicMock()
+        process.stdout = iter(["a line\n"])
+        # First wait hits the deadline; the reaping wait after kill() returns.
+        process.wait.side_effect = [
+            produce_module.subprocess.TimeoutExpired(cmd="cli.py", timeout=1),
+            0,
+        ]
+        with tempfile.TemporaryDirectory() as temp:
+            manifest = Path(temp) / "manifest.jsonl"
+            manifest.write_text("{}\n", encoding="utf-8")
+            with patch("growth.produce.subprocess.Popen", return_value=process):
+                with self.assertRaises(produce_module.ProduceError):
+                    produce_module.run_batch(manifest, timeout=1)
+        process.kill.assert_called_once()
+
+    def test_timeout_kills_the_render_when_quiet(self):
         process = unittest.mock.MagicMock()
         process.communicate.side_effect = [
             produce_module.subprocess.TimeoutExpired(cmd="cli.py", timeout=1),
@@ -356,8 +377,25 @@ class TestRunBatch(unittest.TestCase):
             manifest.write_text("{}\n", encoding="utf-8")
             with patch("growth.produce.subprocess.Popen", return_value=process):
                 with self.assertRaises(produce_module.ProduceError):
-                    produce_module.run_batch(manifest, timeout=1)
+                    produce_module.run_batch(manifest, timeout=1, quiet=True)
         process.kill.assert_called_once()
+
+    def test_the_engine_log_is_echoed_while_it_runs(self):
+        """Swallowing it leaves the terminal silent and discards the reason for
+        any failure."""
+        summary = json.dumps({"total": 1, "succeeded": 1, "failed": 0, "tasks": []})
+        log = f"rendering clip 1\nrendering clip 2\n{summary}\n"
+        with tempfile.TemporaryDirectory() as temp:
+            manifest = Path(temp) / "manifest.jsonl"
+            manifest.write_text("{}\n", encoding="utf-8")
+            with patch(
+                "growth.produce.subprocess.Popen",
+                return_value=self._fake_process(log),
+            ):
+                with patch("sys.stderr", new_callable=io.StringIO) as echoed:
+                    result = produce_module.run_batch(manifest)
+        self.assertEqual(result["succeeded"], 1)
+        self.assertIn("rendering clip 2", echoed.getvalue())
 
     def test_missing_manifest_is_reported_before_starting_anything(self):
         with patch("growth.produce.subprocess.Popen") as popen:
