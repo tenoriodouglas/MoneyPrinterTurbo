@@ -14,6 +14,7 @@ import json
 import sys
 from pathlib import Path
 
+from growth.configure import ConfigError, apply_updates, build_updates, mask
 from growth.doctor import FAIL, OK, WARN, run_checks
 from growth.niche import NicheError, load_all_niches
 from growth.plan import PlanError, create_plan
@@ -58,6 +59,25 @@ def _cmd_niches(args: argparse.Namespace) -> int:
         "\nCPM is what advertisers pay per 1000 monetised views; RPM is your share.\n"
         "Neither applies until the channel is accepted into a partner programme."
     )
+    return 0
+
+
+def _cmd_config(args: argparse.Namespace) -> int:
+    updates = build_updates(
+        pexels=args.pexels,
+        pixabay=args.pixabay,
+        provider=args.llm,
+        provider_key=args.llm_key,
+    )
+    backup = apply_updates(updates)
+    print("updated config.toml:")
+    for key, value in updates.items():
+        # Keys are masked so a terminal recording never captures one.
+        shown = mask(value[0]) if isinstance(value, list) else value
+        shown = mask(shown) if key.endswith("_api_key") else shown
+        print(f"  {key} = {shown}")
+    print(f"\nbackup: {backup.name}")
+    print("\nverify it:\n  python -m growth doctor")
     return 0
 
 
@@ -154,6 +174,15 @@ def main(argv: list[str] | None = None) -> int:
     )
     subparsers = parser.add_subparsers(dest="command", required=True)
 
+    configure = subparsers.add_parser(
+        "config", help="set api keys in config.toml without editing it by hand"
+    )
+    configure.add_argument("--pexels", help="pexels api key")
+    configure.add_argument("--pixabay", help="pixabay api key")
+    configure.add_argument("--llm", help="llm provider id, e.g. gemini")
+    configure.add_argument("--llm-key", help="api key for the provider given by --llm")
+    configure.set_defaults(func=_cmd_config)
+
     doctor = subparsers.add_parser(
         "doctor", help="check this machine and config before rendering"
     )
@@ -213,7 +242,7 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
     try:
         return args.func(args)
-    except (NicheError, PlanError, ProduceError) as exc:
+    except (NicheError, PlanError, ProduceError, ConfigError) as exc:
         print(f"error: {exc}", file=sys.stderr)
         return 1
     except BrokenPipeError:

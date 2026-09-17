@@ -134,6 +134,22 @@ wsl.exe -d kali-linux -- bash -lc "cd ~/MoneyPrinterTurbo && .venv/bin/python -m
 
 Só o LLM custa dinheiro, e é o único item sem alternativa gratuita completa.
 
+Preencha as duas com:
+
+```bash
+.venv/bin/python -m growth config \
+  --pexels SUA_CHAVE_PEXELS \
+  --llm gemini --llm-key SUA_CHAVE_GEMINI
+```
+
+Isso reescreve so as linhas certas, faz backup antes, limpa aspas e espacos que
+vem junto no copiar-colar, recusa a mudanca se o resultado nao for TOML valido,
+e deixa o arquivo em `chmod 600`. As chaves aparecem mascaradas na saida.
+
+Editar a mao tambem funciona, mas repare: **o app reescreve o `config.toml` e
+remove os comentarios na primeira execucao**, entao os numeros de linha mudam
+depois do primeiro uso. Procure pelo nome da chave, nunca pela linha.
+
 Depois de preencher as chaves, confirme tudo de uma vez:
 
 ```bash
@@ -147,6 +163,9 @@ algo estiver quebrado, entao serve para portao em script.
 ## Os comandos
 
 ```bash
+# Preencher as chaves sem editar TOML na mao
+python -m growth config --pexels SUA_CHAVE --llm gemini --llm-key SUA_CHAVE
+
 # Conferir maquina e config ANTES de gastar um render
 python -m growth doctor
 
