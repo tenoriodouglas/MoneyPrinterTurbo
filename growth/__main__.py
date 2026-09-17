@@ -19,6 +19,7 @@ from growth.doctor import FAIL, OK, WARN, run_checks
 from growth.niche import NicheError, load_all_niches
 from growth.plan import PlanError, create_plan
 from growth.produce import LEDGER_PATH, ProduceError, produce
+from growth.review import review_all
 
 
 def _cmd_niches(args: argparse.Namespace) -> int:
@@ -160,6 +161,31 @@ def _cmd_run(args: argparse.Namespace) -> int:
     return 1 if result["failed"] else 0
 
 
+def _cmd_review(args: argparse.Namespace) -> int:
+    reviews = review_all(limit=args.limit)
+    if not reviews:
+        print("nothing produced yet; run `python -m growth run <niche>` first")
+        return 0
+
+    marks = {OK: "\033[32m  ok  \033[0m", WARN: "\033[33m warn \033[0m", FAIL: "\033[31m FAIL \033[0m"}
+    print()
+    for review in reviews:
+        print(
+            f"[{marks[review.status]}] {review.subject[:50]:<50} "
+            f"{review.duration:>5.0f}s  {review.width}x{review.height}  "
+            f"{review.words} words"
+        )
+        for _, message in review.issues:
+            print(f"{'':>21}-> {message}")
+    failed = [r for r in reviews if r.status == FAIL]
+    print()
+    if failed:
+        print(f"{len(failed)} of {len(reviews)} video(s) should not be published as is")
+        return 1
+    print(f"all {len(reviews)} video(s) pass; captions are in the same folder")
+    return 0
+
+
 def _cmd_ledger(args: argparse.Namespace) -> int:
     if not LEDGER_PATH.is_file():
         print("no ledger yet; run `python -m growth run <niche>` first")
@@ -253,6 +279,14 @@ def main(argv: list[str] | None = None) -> int:
         "--quiet", action="store_true", help="hide the engine's render log"
     )
     running.set_defaults(func=_cmd_run)
+
+    reviewer = subparsers.add_parser(
+        "review", help="check produced videos against the rules that let them earn"
+    )
+    reviewer.add_argument(
+        "--limit", type=int, default=10, help="how many recent videos to check"
+    )
+    reviewer.set_defaults(func=_cmd_review)
 
     ledger = subparsers.add_parser("ledger", help="show what has been produced")
     ledger.add_argument("--limit", type=int, default=20)

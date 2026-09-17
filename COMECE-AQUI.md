@@ -184,6 +184,9 @@ python -m growth run b2b-software --count 3
 # Corte longo 16:9 para YouTube, onde o CPM alto realmente se aplica
 python -m growth plan personal-finance --count 2 --aspect 16:9 --paragraphs 9
 
+# Conferir se os videos podem faturar antes de publicar
+python -m growth review
+
 # Ver tudo que já foi produzido
 python -m growth ledger
 ```
