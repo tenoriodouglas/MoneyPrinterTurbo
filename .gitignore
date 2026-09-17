@@ -1,6 +1,8 @@
 .DS_Store
 /config.toml
 /config.toml.bak
+# growth config writes timestamped backups, and they hold the same api keys.
+/config.toml.bak.*
 /storage/
 /.idea/
 /app/services/__pycache__

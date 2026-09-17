@@ -1,4 +1,6 @@
+import shutil
 import stat
+import subprocess
 import sys
 import tempfile
 import tomllib
@@ -146,6 +148,48 @@ class TestApplyUpdates(unittest.TestCase):
             path.write_text("[app]\nbroken = [[[\n", encoding="utf-8")
             with self.assertRaises(ConfigError):
                 apply_updates({"llm_provider": "gemini"}, config_path=path)
+
+
+class TestBackupsStayOutOfGit(unittest.TestCase):
+    """A backup is a copy of config.toml, so it holds the same api keys.
+    Committing one would publish them."""
+
+    REPO = Path(__file__).parent.parent.parent
+
+    @unittest.skipUnless(shutil.which("git"), "git is not available")
+    def test_the_backup_name_this_code_writes_is_ignored(self):
+        with tempfile.TemporaryDirectory() as temp:
+            path = Path(temp) / "config.toml"
+            path.write_text(SAMPLE, encoding="utf-8")
+            backup = apply_updates({"llm_provider": "gemini"}, config_path=path)
+
+        # Ask git itself rather than reimplementing gitignore matching.
+        result = subprocess.run(
+            ["git", "check-ignore", "-q", backup.name],
+            cwd=self.REPO,
+            capture_output=True,
+        )
+        self.assertEqual(
+            result.returncode, 0, f"{backup.name} is not covered by .gitignore"
+        )
+
+    @unittest.skipUnless(shutil.which("git"), "git is not available")
+    def test_config_itself_is_ignored(self):
+        result = subprocess.run(
+            ["git", "check-ignore", "-q", "config.toml"],
+            cwd=self.REPO,
+            capture_output=True,
+        )
+        self.assertEqual(result.returncode, 0)
+
+    def test_the_backup_inherits_restrictive_permissions(self):
+        with tempfile.TemporaryDirectory() as temp:
+            path = Path(temp) / "config.toml"
+            path.write_text(SAMPLE, encoding="utf-8")
+            path.chmod(0o600)
+            backup = apply_updates({"llm_provider": "gemini"}, config_path=path)
+            # Read the mode before the temporary directory is removed.
+            self.assertEqual(stat.S_IMODE(backup.stat().st_mode), 0o600)
 
 
 class TestMask(unittest.TestCase):
