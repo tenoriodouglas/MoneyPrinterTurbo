@@ -266,11 +266,11 @@ o que elimina a parte mais chata de configurar uma VPS gratuita.
 # 1. Crie o bot no @BotFather no Telegram e copie o token
 python -m growth config --telegram-token SEU_TOKEN
 
-# 2. Rode e mande /start para o bot; ele responde com o id do seu chat
+# 2. Rode e mande qualquer coisa ao bot; ele responde com o id do SEU usuario
 python -m growth bot
 
-# 3. Autorize esse id e rode como serviço
-python -m growth config --telegram-chat SEU_CHAT_ID
+# 3. Autorize esse id e rode como servico
+python -m growth config --telegram-user SEU_USER_ID
 deploy/install-bot.sh
 ```
 
@@ -278,9 +278,10 @@ Comandos: `/niches`, `/run <nicho> [n]`, `/status`, `/review`, `/last [n]`.
 
 Três coisas de propósito:
 
-- **Só os chats autorizados são atendidos.** Qualquer um pode achar um bot e
-  mandar mensagem, e um render gasta cota de API e uma hora de CPU. Um chat não
-  listado recebe apenas o próprio id, para você decidir se libera.
+- **A trava é pelo seu usuário do Telegram, não pela conversa.** Em conversa
+  privada os dois números são iguais, mas o id de um grupo pertence ao grupo:
+  autorizar a conversa entregaria o bot a todos os membros dele. Quem não está
+  na lista recebe apenas o próprio id, para você decidir se libera.
 - **Um lote por vez.** Dois renders competindo por 2 núcleos terminam depois do
   que os mesmos dois em sequência.
 - **Vídeo acima de 50 MB não sobe.** É o teto do Bot API. Nesse caso o bot

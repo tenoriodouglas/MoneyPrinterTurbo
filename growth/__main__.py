@@ -73,7 +73,7 @@ def _cmd_config(args: argparse.Namespace) -> int:
         niche=args.niche,
         image_key=args.image_key,
         telegram_token=args.telegram_token,
-        telegram_chats=args.telegram_chat,
+        telegram_users=args.telegram_user,
     )
     backup = apply_updates(updates)
     print("updated config.toml:")
@@ -243,10 +243,10 @@ def main(argv: list[str] | None = None) -> int:
     )
     configure.add_argument("--telegram-token", help="bot token from @BotFather")
     configure.add_argument(
-        "--telegram-chat",
+        "--telegram-user",
         action="append",
-        metavar="CHAT_ID",
-        help="chat allowed to drive the bot; repeat for more than one",
+        metavar="USER_ID",
+        help="telegram user allowed to drive the bot; repeat for more than one",
     )
     configure.set_defaults(func=_cmd_config)
 

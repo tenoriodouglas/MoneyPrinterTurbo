@@ -40,8 +40,13 @@ class FakeClient:
         return " ".join(text for target, text in self.messages if target == chat_id)
 
 
-def _message(text, chat_id=OWNER):
-    return {"chat": {"id": chat_id}, "text": text}
+def _message(text, chat_id=OWNER, sender_id=None):
+    """A private chat carries the same id in both places; a group does not."""
+    return {
+        "chat": {"id": chat_id},
+        "from": {"id": OWNER if sender_id is None else sender_id},
+        "text": text,
+    }
 
 
 def _wait_idle(bot, timeout=10):
@@ -65,19 +70,43 @@ def _bot(client=None, runner=None, allowed=None):
 
 class TestAccessControl(unittest.TestCase):
     """A bot token is discoverable and anyone can message it. A render spends
-    api quota and an hour of cpu, so an unlisted chat must not start one."""
+    api quota and an hour of cpu, so only the owner may start one."""
 
     def test_a_stranger_cannot_start_a_render(self):
         client = FakeClient()
         started = []
         bot = _bot(client, runner=lambda n, c: started.append(n) or {})
-        bot.handle(_message("/run ufo-sightings", chat_id=STRANGER))
+        bot.handle(_message("/run ufo-sightings", chat_id=STRANGER, sender_id=STRANGER))
         self.assertEqual(started, [])
 
     def test_a_stranger_is_told_the_id_to_allow(self):
         client = FakeClient()
-        _bot(client).handle(_message("/run ufo-sightings", chat_id=STRANGER))
+        _bot(client).handle(_message("/run ufo-sightings", chat_id=STRANGER, sender_id=STRANGER))
         self.assertIn(str(STRANGER), client.texts_to(STRANGER))
+
+    def test_a_group_member_cannot_drive_the_bot(self):
+        """A group's chat id belongs to the group. Authorising the conversation
+        instead of the sender would hand it to every member."""
+        group = -100123
+        client = FakeClient()
+        started = []
+        bot = _bot(client, runner=lambda n, c: started.append(n) or {})
+        bot.handle(_message("/run ufo-sightings", chat_id=group, sender_id=STRANGER))
+        self.assertEqual(started, [])
+
+    def test_the_owner_is_served_even_from_a_group(self):
+        group = -100123
+        client = FakeClient()
+        _bot(client).handle(_message("/niches", chat_id=group, sender_id=OWNER))
+        self.assertIn("ufo-sightings", client.texts_to(group))
+
+    def test_a_message_with_no_sender_is_refused(self):
+        """Channel posts carry no author to authorise."""
+        client = FakeClient()
+        started = []
+        bot = _bot(client, runner=lambda n, c: started.append(n) or {})
+        bot.handle({"chat": {"id": OWNER}, "text": "/run ufo-sightings"})
+        self.assertEqual(started, [])
 
     def test_an_empty_allowlist_answers_no_one(self):
         client = FakeClient()
@@ -92,10 +121,10 @@ class TestAccessControl(unittest.TestCase):
 
 
 class TestCommands(unittest.TestCase):
-    def test_start_reports_the_chat_id(self):
+    def test_start_lists_the_commands(self):
         client = FakeClient()
         _bot(client).handle(_message("/start"))
-        self.assertIn(str(OWNER), client.texts_to(OWNER))
+        self.assertIn("/run", client.texts_to(OWNER))
 
     def test_unknown_command_points_at_help(self):
         client = FakeClient()
@@ -232,19 +261,29 @@ class TestSettings(unittest.TestCase):
             load_settings({})
         self.assertIn("BotFather", str(context.exception))
 
-    def test_chat_ids_are_parsed_to_numbers(self):
-        _, chats = load_settings({"telegram_bot_token": "t", "telegram_allowed_chats": ["1", 2]})
-        self.assertEqual(chats, {1, 2})
-
-    def test_unparseable_chat_ids_are_skipped_not_fatal(self):
-        _, chats = load_settings(
-            {"telegram_bot_token": "t", "telegram_allowed_chats": ["7", "abc"]}
+    def test_user_ids_are_parsed_to_numbers(self):
+        _, users = load_settings(
+            {"telegram_bot_token": "t", "telegram_allowed_users": ["1", 2]}
         )
-        self.assertEqual(chats, {7})
+        self.assertEqual(users, {1, 2})
 
-    def test_a_single_chat_id_need_not_be_a_list(self):
-        _, chats = load_settings({"telegram_bot_token": "t", "telegram_allowed_chats": 5})
-        self.assertEqual(chats, {5})
+    def test_unparseable_ids_are_skipped_not_fatal(self):
+        _, users = load_settings(
+            {"telegram_bot_token": "t", "telegram_allowed_users": ["7", "abc"]}
+        )
+        self.assertEqual(users, {7})
+
+    def test_a_single_id_need_not_be_a_list(self):
+        _, users = load_settings({"telegram_bot_token": "t", "telegram_allowed_users": 5})
+        self.assertEqual(users, {5})
+
+    def test_the_older_key_name_still_works(self):
+        """In a private chat it holds the same number, so a config written
+        before the rename keeps working."""
+        _, users = load_settings(
+            {"telegram_bot_token": "t", "telegram_allowed_chats": ["9"]}
+        )
+        self.assertEqual(users, {9})
 
 
 class TestPolling(unittest.TestCase):

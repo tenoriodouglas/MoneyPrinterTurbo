@@ -120,11 +120,11 @@ class GrowthBot:
     def __init__(
         self,
         client: TelegramClient,
-        allowed_chats: set[int],
+        allowed_users: set[int],
         runner: Callable[..., dict[str, Any]] | None = None,
     ):
         self.client = client
-        self.allowed_chats = allowed_chats
+        self.allowed_users = allowed_users
         # Injected so the render can be exercised without spending twenty
         # minutes and an api quota.
         self._runner = runner or self._render
@@ -191,8 +191,7 @@ class GrowthBot:
             "/run &lt;niche&gt; [count] — render a batch\n"
             "/status — what is running now\n"
             "/review — check recent videos before posting\n"
-            "/last [n] — resend recent videos\n\n"
-            f"This chat id is <code>{chat_id}</code>."
+            "/last [n] — resend recent videos"
         )
 
     def _cmd_niches(self, _: int, __: list[str]) -> str:
@@ -297,19 +296,23 @@ class GrowthBot:
     def handle(self, message: dict[str, Any]) -> None:
         """Dispatch one incoming message."""
         chat_id = int(message.get("chat", {}).get("id", 0))
+        sender_id = int((message.get("from") or {}).get("id", 0))
         text = str(message.get("text", "")).strip()
         if not chat_id or not text:
             return
 
-        # Anyone can find a bot and message it. An unlisted chat is told its
-        # id so the owner can allow it, and nothing else happens: a render
-        # spends api quota and an hour of someone else's cpu.
-        if chat_id not in self.allowed_chats:
-            logger.warning(f"ignoring message from unlisted chat {chat_id}")
+        # Authorise the sender, not the conversation. In a private chat the two
+        # ids are the same number, but a group's chat id belongs to the group:
+        # allowing that would let every member of it start renders. A message
+        # with no sender (a channel post) has nobody to authorise.
+        if not sender_id or sender_id not in self.allowed_users:
+            logger.warning(
+                f"ignoring message from unlisted user {sender_id} in chat {chat_id}"
+            )
             self._say(
                 chat_id,
                 "This bot only answers its owner.\n"
-                f"Your chat id is <code>{chat_id}</code>.",
+                f"Your telegram user id is <code>{sender_id or 'unknown'}</code>.",
             )
             return
 
@@ -354,7 +357,7 @@ def poll_forever(bot: GrowthBot, client: TelegramClient, stop: threading.Event |
 
 
 def load_settings(app_config: dict[str, Any] | None = None) -> tuple[str, set[int]]:
-    """Read the token and the chats allowed to drive it."""
+    """Read the token and the telegram users allowed to drive it."""
     if app_config is None:
         from app.config import config
 
@@ -367,16 +370,22 @@ def load_settings(app_config: dict[str, Any] | None = None) -> tuple[str, set[in
             "python -m growth config --telegram-token <token>"
         )
 
-    raw = app_config.get("telegram_allowed_chats") or []
+    # telegram_allowed_chats is the name this shipped with; in a private chat
+    # it holds the same number, so it is still honoured.
+    raw = (
+        app_config.get("telegram_allowed_users")
+        or app_config.get("telegram_allowed_chats")
+        or []
+    )
     if isinstance(raw, (str, int)):
         raw = [raw]
-    chats: set[int] = set()
+    users: set[int] = set()
     for value in raw:
         try:
-            chats.add(int(str(value).strip()))
+            users.add(int(str(value).strip()))
         except (TypeError, ValueError):
             continue
-    return token, chats
+    return token, users
 
 
 def run(app_config: dict[str, Any] | None = None) -> int:
@@ -388,10 +397,10 @@ def run(app_config: dict[str, Any] | None = None) -> int:
 
     if not allowed:
         logger.warning(
-            "telegram_allowed_chats is empty: the bot will answer no one. "
-            "Message the bot, then add the chat id it replies with."
+            "telegram_allowed_users is empty: the bot will answer no one. "
+            "Message the bot, then add the user id it replies with."
         )
-    logger.info(f"telegram bot @{name} polling; allowed chats: {sorted(allowed) or 'none'}")
+    logger.info(f"telegram bot @{name} polling; allowed users: {sorted(allowed) or 'none'}")
 
     bot = GrowthBot(client, allowed)
     try:
