@@ -72,6 +72,8 @@ def _cmd_config(args: argparse.Namespace) -> int:
         provider_model=args.llm_model,
         niche=args.niche,
         image_key=args.image_key,
+        telegram_token=args.telegram_token,
+        telegram_chats=args.telegram_chat,
     )
     backup = apply_updates(updates)
     print("updated config.toml:")
@@ -188,6 +190,16 @@ def _cmd_review(args: argparse.Namespace) -> int:
     return 0
 
 
+def _cmd_bot(args: argparse.Namespace) -> int:
+    from growth.bot import BotError, run
+
+    try:
+        return run()
+    except BotError as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return 1
+
+
 def _cmd_ledger(args: argparse.Namespace) -> int:
     if not LEDGER_PATH.is_file():
         print("no ledger yet; run `python -m growth run <niche>` first")
@@ -228,6 +240,13 @@ def main(argv: list[str] | None = None) -> int:
     )
     configure.add_argument(
         "--image-key", help="api key for the image endpoint given by --niche"
+    )
+    configure.add_argument("--telegram-token", help="bot token from @BotFather")
+    configure.add_argument(
+        "--telegram-chat",
+        action="append",
+        metavar="CHAT_ID",
+        help="chat allowed to drive the bot; repeat for more than one",
     )
     configure.set_defaults(func=_cmd_config)
 
@@ -301,6 +320,11 @@ def main(argv: list[str] | None = None) -> int:
         "--limit", type=int, default=10, help="how many recent videos to check"
     )
     reviewer.set_defaults(func=_cmd_review)
+
+    telegram = subparsers.add_parser(
+        "bot", help="drive the pipeline from telegram and receive the videos there"
+    )
+    telegram.set_defaults(func=_cmd_bot)
 
     ledger = subparsers.add_parser("ledger", help="show what has been produced")
     ledger.add_argument("--limit", type=int, default=20)

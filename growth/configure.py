@@ -143,6 +143,8 @@ def build_updates(
     provider_model: str | None = None,
     niche: str | None = None,
     image_key: str | None = None,
+    telegram_token: str | None = None,
+    telegram_chats: list[str] | None = None,
 ) -> dict[str, str | list[str]]:
     """Validate the requested changes and map them to config keys."""
     updates: dict[str, str | list[str]] = {}
@@ -172,6 +174,22 @@ def build_updates(
             # so an explicit name has to be settable without editing the file.
             updates[f"{name}_model_name"] = clean_key(provider_model, f"{name} model")
 
+    if telegram_token:
+        updates["telegram_bot_token"] = clean_key(telegram_token, "telegram token")
+    if telegram_chats:
+        ids: list[str] = []
+        for value in telegram_chats:
+            cleaned = str(value).strip()
+            try:
+                # Stored as strings so the TOML writer stays one code path;
+                # the bot parses them back to ints.
+                ids.append(str(int(cleaned)))
+            except ValueError as exc:
+                raise ConfigError(
+                    f"telegram chat id must be a number, got {cleaned!r}"
+                ) from exc
+        updates["telegram_allowed_chats"] = ids
+
     if image_key and not niche:
         raise ConfigError("--image-key needs --niche to say which style it serves")
 
@@ -198,6 +216,7 @@ def build_updates(
 
     if not updates:
         raise ConfigError(
-            "nothing to set; pass --pexels, --llm, --llm-key, --llm-model or --niche"
+            "nothing to set; pass --pexels, --llm, --llm-key, --llm-model, "
+            "--niche or --telegram-token"
         )
     return updates

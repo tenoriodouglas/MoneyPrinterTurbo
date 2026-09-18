@@ -256,6 +256,37 @@ Isso reduz o risco. Não elimina. Leia `docs/MONETIZACAO.md` antes de publicar
 o primeiro vídeo — principalmente a parte de por que receita de anúncio em
 Shorts é o pior caminho e o que funciona melhor.
 
+## Pelo Telegram
+
+Dispara os lotes e recebe os vídeos no celular, sem SSH. Como o bot faz
+*polling*, o servidor **não precisa de porta aberta, domínio nem certificado** —
+o que elimina a parte mais chata de configurar uma VPS gratuita.
+
+```bash
+# 1. Crie o bot no @BotFather no Telegram e copie o token
+python -m growth config --telegram-token SEU_TOKEN
+
+# 2. Rode e mande /start para o bot; ele responde com o id do seu chat
+python -m growth bot
+
+# 3. Autorize esse id e rode como serviço
+python -m growth config --telegram-chat SEU_CHAT_ID
+deploy/install-bot.sh
+```
+
+Comandos: `/niches`, `/run <nicho> [n]`, `/status`, `/review`, `/last [n]`.
+
+Três coisas de propósito:
+
+- **Só os chats autorizados são atendidos.** Qualquer um pode achar um bot e
+  mandar mensagem, e um render gasta cota de API e uma hora de CPU. Um chat não
+  listado recebe apenas o próprio id, para você decidir se libera.
+- **Um lote por vez.** Dois renders competindo por 2 núcleos terminam depois do
+  que os mesmos dois em sequência.
+- **Vídeo acima de 50 MB não sobe.** É o teto do Bot API. Nesse caso o bot
+  manda o caminho no servidor em vez de falhar calado — acontece com cortes
+  longos 16:9, não com os verticais de ~24 MB.
+
 ## Documentação
 
 - **`docs/MONETIZACAO.md`** — a matemática real de quanto cada caminho paga,
