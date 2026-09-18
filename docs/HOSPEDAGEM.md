@@ -23,6 +23,31 @@ Uma ressalva honesta: o teste usou imagens estáticas como material. Com clipes
 de vídeo do Pexels há decodificação do material de origem, então o custo real
 fica acima disso — trate 10 min/vídeo como piso, não como média.
 
+## Medição de um vídeo ilustrado completo
+
+O pack `ufo-sightings` gera as cenas em vez de buscar em banco, e o perfil é
+diferente. Um vídeo real de 91 s, na mesma máquina de 4 vCPU:
+
+| Etapa | Tempo | Observação |
+|---|---|---|
+| Pauta + roteiro + narração + legenda | ~2 min | quase tudo espera de rede |
+| Geração das imagens | ~21 s por cena | **rede**, não CPU: o GPU é do provedor |
+| Combinação + render final | ~12 min | **é aqui que a CPU trabalha** |
+| **Total** | **~17 min** | com 8 cenas |
+
+Medido na fase de combinação: **pico de 586 MB de RAM, 243% de CPU** (ou seja,
+usa cerca de 2,4 núcleos). Arquivo final de 24 MB.
+
+Com as ~21 cenas que o pack passou a pedir, a geração sobe para ~7 min e o
+total fica em **~20 a 22 min por vídeo**.
+
+Duas conclusões que mudam a escolha de servidor:
+
+1. **Não precisa de GPU nem de máquina grande.** O trabalho pesado de imagem
+   acontece no provedor. O que sobra local é ffmpeg.
+2. **O gargalo é CPU de render**, e ele escala com a duração do vídeo, não com
+   o número de cenas.
+
 ## O que o app exige de verdade
 
 - **CPU**: é o único gargalo. Render é ffmpeg, puro CPU.
@@ -82,6 +107,38 @@ dia e você não quiser deixar a máquina ligada. Use `deploy/bootstrap-ubuntu.s
 
 **Pague a Hetzner (~€4/mês)** se a Oracle não liberar capacidade ARM ou se
 você quiser previsibilidade. É menos de um café por mês e elimina o problema.
+
+## Por que um VPS resolve o que o WSL não resolve
+
+A diferença não é potência, é o agendador. No WSL, timer e cron só disparam
+enquanto o Windows está ligado e a distro rodando — desligou a máquina, o lote
+não acontece. Num VPS há systemd de verdade, e `deploy/install-timer.sh`
+instala um timer que dispara sozinho, com `Persistent=true` para recuperar um
+disparo perdido caso a máquina tenha ficado fora do ar.
+
+Uma vez no servidor, o ciclo diário não depende de você:
+
+```bash
+deploy/install-timer.sh ufo-sightings 2 07:00
+```
+
+O que **continua** dependendo de você é publicar. Nada é postado
+automaticamente, de propósito: os vídeos ficam em `storage/growth/out/` para
+serem revistos. Rode `python -m growth review` antes de subir qualquer coisa.
+
+## Limpeza de disco, que passa despercebida
+
+Cada vídeo final tem ~24 MB, e o diretório da tarefa guarda as imagens
+geradas, os clipes intermediários e o áudio — bem mais que isso. Dois vídeos
+por dia enchem alguns GB por mês.
+
+Nos 200 GB da Oracle isso demora a incomodar; nos 40 GB de um VPS pequeno, não.
+Limpe as tarefas antigas periodicamente — as saídas finais já estão copiadas
+para `storage/growth/out/`:
+
+```bash
+find storage/tasks -mindepth 1 -maxdepth 1 -type d -mtime +7 -exec rm -rf {} +
+```
 
 ## Custo de API, que é o custo que sobra
 
