@@ -1,0 +1,159 @@
+# Brazilian-market version of the personal-finance pack. Finance is still the
+# strongest advertiser category here, but a Brazilian view is worth a fraction
+# of a US one, so the economics below are much lower than the English pack's.
+# The regulatory line matters more than the CPM: individualised investment
+# recommendation is a licensed activity in Brazil and the CVM regulates it, so
+# this pack explains mechanisms and never tells a viewer what to buy.
+
+[niche]
+id = "personal-finance-pt"
+name = "Finanças Pessoais e Investimentos no Brasil"
+# Free text passed to the model as the narration language; the voices below
+# are the pt-BR ones, so the script and the audio agree.
+language = "pt-BR"
+platforms = ["tiktok", "youtube_shorts"]
+
+[economics]
+# Brazilian-market figures in USD, well under the English personal-finance
+# pack's $15-30: local advertiser rates are far below US rates for the same
+# view. Estimates used only to rank packs, never a forecast of earnings.
+cpm_low = 3.0
+cpm_high = 7.0
+competition = "high"
+
+[audience]
+description = "Pessoas de 25 a 45 anos com renda e sem sistema: ganham razoavelmente bem, guardam dinheiro de forma irregular e desconfiam que estão atrasadas."
+pain_points = [
+    "guardar dinheiro sem objetivo definido, então o progresso nunca aparece",
+    "não saber o que vem primeiro: quitar dívida, formar reserva ou investir",
+    "tratar investimento como escolha de ativo, quando prazo, taxa e liquidez decidem mais",
+    "deixar o rotativo do cartão e o cheque especial rodando enquanto tenta render dinheiro",
+    "não entender o que a Selic, o CDI e a tabela regressiva do IR fazem com o rendimento",
+    "cada aumento de salário virar despesa fixa nova",
+]
+
+[content]
+angles = [
+    "contraintuitivo: contestar um conselho que o público já aceita como verdade",
+    "conta na tela: uma única conta simples que muda a conclusão",
+    "dois casos: mesma renda, desfechos diferentes, e onde o caminho se separou",
+    "mecanismo: o que de fato move o número e por quê",
+    "custo de esperar: o que adiar a decisão cobra, em termos concretos",
+    "mito: uma regra de bolso que quebra a partir de certo ponto",
+    "ordem: por onde começar e a razão de cada etapa",
+    "custo invisível: a taxa ou o tributo que o público paga sem enxergar",
+]
+system_prompt = """
+Você escreve roteiros de narração para um canal de vídeos curtos sobre
+finanças pessoais no Brasil. O canal é informativo: explica como as coisas
+funcionam e nunca diz a ninguém o que comprar.
+
+Voz: direta, objetiva, sem euforia de vendedor. Soa como quem leu a regra e
+refez a conta, não como quem repete manchete de portal.
+
+Regras de conteúdo:
+- Abra com a afirmação mais surpreendente. Sem saudação, sem nome do canal,
+  sem "neste vídeo". A primeira frase precisa segurar o dedo na tela.
+- Uma ideia por roteiro. Não faça panorama de tema: prove uma coisa só.
+- Chame o mecanismo pelo nome: Selic, CDI, tabela regressiva do Imposto de
+  Renda, liquidez, prazo, amortização, custo efetivo total, juros compostos.
+  A precisão é o que separa isso de conselho genérico.
+- Trabalhe com o que existe no Brasil: Tesouro Direto, CDB, LCI e LCA,
+  poupança, FGTS, consignado, rotativo do cartão, cheque especial,
+  portabilidade de dívida, declaração de Imposto de Renda.
+- Feche com uma verificação concreta que o ouvinte faz nesta semana, dita
+  como instrução: conferir uma taxa na fatura, comparar o custo efetivo de
+  duas propostas, olhar o prazo de resgate de uma aplicação. Nunca peça
+  curtida, inscrição ou comentário.
+- Português do Brasil falado e simples. Sem markdown, sem títulos, sem emoji,
+  sem rubrica de cena, sem nome de locutor. Escreva apenas as palavras que
+  serão lidas em voz alta.
+
+Regras regulatórias, que valem mais do que qualquer outra aqui:
+- NUNCA indique um ativo, título, fundo, ação, corretora, banco ou produto
+  específico como a escolha certa. Citar uma categoria para explicar como ela
+  funciona é permitido; dizer "compre este" não é.
+- NUNCA prometa, projete ou insinue rentabilidade, ganho ou retorno futuro.
+  Nada de "rende tanto por mês", "dobra em tantos anos", "retorno garantido",
+  "não tem risco".
+- NUNCA apresente o roteiro como recomendação personalizada, consultoria ou
+  análise de investimento. Recomendação individual é atividade regulada no
+  Brasil e só pode ser feita por profissional habilitado.
+- NUNCA invente número, taxa, percentual, limite ou regra tributária. Se a
+  conta exigir um valor do qual você não tem certeza, descreva o mecanismo e
+  mande o ouvinte conferir o número na fonte oficial, em vez de afirmá-lo.
+- Se usar números em um exemplo, diga em voz alta que são ilustrativos e
+  arredondados, e mantenha a conta simples o bastante para o ouvinte refazer.
+- Diga, em uma oração, quando a regra depende da situação de cada pessoa:
+  prazo, faixa de renda, modelo de declaração, vínculo de trabalho, dívidas
+  em aberto, objetivo do dinheiro.
+- Deixe explícito, sem juridiquês, que o vídeo é informação e educação
+  financeira, não recomendação de investimento.
+- Regra tributária, limite legal e taxa mudam com o tempo. Ao citar uma,
+  diga que vale conferir a regra vigente antes de agir.
+"""
+script_guidance = """
+Mire em 165-200 palavras, cerca de 65-80 segundos falados. O TikTok só
+remunera acima de um minuto, então não entregue curto.
+Estrutura: gancho, a crença errada, o mecanismo que a desmonta, um exemplo
+com números declarados como ilustrativos, o limite da regra, e a verificação
+concreta que o ouvinte faz nesta semana.
+"""
+banned_phrases = [
+    "fique rico",
+    "o segredo que os bancos escondem",
+    "renda extra garantida",
+    "o melhor investimento do momento",
+    "dinheiro trabalhando por você",
+    "no vídeo de hoje",
+    "fala galera",
+    "se inscreve no canal",
+]
+seed_topics = [
+    "por que quanto você guarda por mês decide mais do que quanto você ganha",
+    "por que quitar o rotativo do cartão vence qualquer aplicação de renda fixa",
+    "o que a tabela regressiva do Imposto de Renda faz com um resgate antecipado",
+    "o que significa render um percentual do CDI, e o que isso não garante",
+    "reserva de emergência: por que liquidez pesa mais que rendimento",
+    "por que comparar dívidas pelo custo efetivo total, e não pela parcela",
+]
+# Stock-footage search keywords read by the footage provider, not by the
+# narrator, so they stay in English; the scenes lean Brazilian where it helps
+# the search return the right country.
+visual_terms = [
+    "brazilian city street aerial",
+    "person working laptop home desk",
+    "financial charts on screen",
+    "counting banknotes close up",
+    "supermarket checkout card payment",
+    "calculator notebook bills desk",
+    "banking app on smartphone",
+    "sao paulo skyline morning",
+]
+
+[video]
+# Mirrors the English pack, including its stock footage source; only the
+# voices change, and pt-BR offers exactly these three.
+aspect = "9:16"
+voice_names = [
+    "pt-BR-FranciscaNeural",
+    "pt-BR-AntonioNeural",
+    "pt-BR-ThalitaMultilingualNeural",
+]
+font_size = 72
+stroke_width = 3.5
+subtitle_position = "custom"
+custom_position = 62.0
+subtitle_display_mode = "word_by_word"
+subtitle_animation = "pop_spring"
+clip_duration = 4
+paragraph_number = 5
+
+[platform]
+hashtags = ["#financaspessoais", "#educacaofinanceira", "#investimentos", "#rendafixa", "#dinheiro"]
+
+# Operator-facing notes, kept in English like the other packs.
+[monetization]
+primary = "affiliate"
+notes = "Brokerage and digital-bank referrals pay on account opening and need no follower threshold, which beats ad revenue at Brazilian CPMs. Any referral must stay out of the script itself: the pack's rules forbid naming a product as a recommendation."
+affiliate_categories = ["brokerage account referrals", "digital bank signups", "budgeting apps", "financial education courses"]

@@ -782,6 +782,177 @@ class TestThemedPlan(unittest.TestCase):
             )
 
 
+_NICHES_DIR = Path(__file__).resolve().parent.parent.parent / "niches"
+
+
+def _engine_voice_names() -> set[str]:
+    """Voice ids the render engine can actually speak.
+
+    Taken from the engine's own shipped list rather than retyped here: a list
+    written into a test agrees with itself while the engine rejects the voice.
+    """
+    # Imported here because the imports at the top of this file are fixed.
+    from app.services.voice import get_all_azure_voices, parse_voice_name
+
+    # The engine appends the gender ("...Neural-Female"); packs store the bare
+    # id, which is what parse_voice_name strips back to.
+    return {parse_voice_name(name) for name in get_all_azure_voices()}
+
+
+def _voice_locale(voice_name: str) -> str:
+    """The "pt-BR" of "pt-BR-FranciscaNeural"."""
+    return "-".join(voice_name.split("-")[:2]).lower()
+
+
+def _speaks(voice_name: str, language: str) -> bool:
+    """Whether a voice reads the language a pack narrates in.
+
+    A pack that names a region ("pt-BR") demands that region: a pt-PT voice
+    is the wrong accent for Brazil. One that names only a language ("en")
+    takes any region of it.
+    """
+    wanted = language.strip().lower()
+    locale = _voice_locale(voice_name)
+    return locale == wanted if "-" in wanted else locale.split("-")[0] == wanted
+
+
+def _synthetic_brief(niche) -> plan_module.Brief:
+    """A brief shaped like parse_briefs output, on the pack's own angle."""
+    return plan_module.Brief(
+        subject=f"One specific claim about {niche.name}",
+        angle=niche.angles[0],
+        hook="One surprising sentence.",
+        key_points=["point one", "point two"],
+        search_terms=[niche.visual_terms[0]],
+        call_to_action="Do the specific thing.",
+    )
+
+
+class TestEveryShippedPack(unittest.TestCase):
+    """Properties every pack has to hold whatever language it narrates in.
+
+    Packs are discovered, never listed by name: the set grows, and a name
+    typed here would stop covering the pack added after it.
+    """
+
+    def setUp(self):
+        self.packs = load_all_niches()
+
+    def test_every_pack_file_is_listed_under_its_own_filename(self):
+        """load_all_niches logs and skips a pack it cannot parse, and never
+        checks the id against the filename. Either way the pack drops out of
+        the listing rather than failing, so it is invisible until someone runs
+        it by name through load_niche, which does reject both - and until then
+        every other test here passes by never seeing that pack."""
+        listed = {pack.id for pack in self.packs}
+        for path in sorted(_NICHES_DIR.glob("*.toml")):
+            with self.subTest(path.stem):
+                self.assertIn(path.stem, listed)
+
+    def test_every_pack_declares_voices_the_engine_can_speak(self):
+        """A voice id the engine does not know fails at the TTS call, minutes
+        into a batch, with the script already generated and paid for."""
+        known = _engine_voice_names()
+        for pack in self.packs:
+            with self.subTest(pack.id):
+                self.assertTrue(pack.video.voice_names)
+                for voice in pack.video.voice_names:
+                    self.assertIn(voice, known)
+
+    def test_every_voice_reads_the_language_its_pack_narrates_in(self):
+        """A Portuguese script read by an English voice renders without an
+        error and mispronounces every word of it. Nothing downstream looks at
+        the pair, so the first thing that catches it is a person listening."""
+        for pack in self.packs:
+            for voice in pack.video.voice_names:
+                with self.subTest(pack=pack.id, voice=voice):
+                    self.assertTrue(_speaks(voice, pack.language))
+
+    def test_a_generating_pack_draws_a_different_image_per_scene(self):
+        """video_source=openai_image renders one image per search term through
+        the pack's template. With no [images] the engine has no endpoint to
+        call, and with no {term} in the template every scene of the video gets
+        the same picture."""
+        for pack in self.packs:
+            if pack.video.video_source != "openai_image":
+                continue
+            with self.subTest(pack.id):
+                self.assertTrue(pack.images.configured)
+                self.assertIn("{term}", pack.images.prompt_template)
+
+    def test_every_pack_offers_enough_distinct_angles(self):
+        """The angle is what makes two videos in one batch different, and the
+        planner hands them out by position. Fewer angles than a batch has
+        videos, or the same angle twice, plans the same video twice."""
+        for pack in self.packs:
+            with self.subTest(pack.id):
+                self.assertGreaterEqual(len(pack.angles), 4)
+                self.assertEqual(len(set(pack.angles)), len(pack.angles))
+
+    def test_every_system_prompt_fits_the_field_that_carries_it(self):
+        """It is copied into VideoParams.custom_system_prompt on every task in
+        the batch; over the ceiling the batch is rejected before the first
+        render, and empty means the pack has no editorial voice at all."""
+        from growth.niche import MAX_SYSTEM_PROMPT
+
+        for pack in self.packs:
+            with self.subTest(pack.id):
+                self.assertTrue(pack.system_prompt.strip())
+                self.assertLessEqual(len(pack.system_prompt), MAX_SYSTEM_PROMPT)
+
+    def test_every_pack_builds_a_planning_prompt_naming_its_language(self):
+        """The prompt is the only place the narration language is stated. A
+        pt-BR pack that loses it plans a batch of English briefs, which is
+        found at the end of the render rather than the start."""
+        for pack in self.packs:
+            with self.subTest(pack.id):
+                self.assertIn(pack.language, plan_module.build_prompt(pack, 2, []))
+
+    def test_every_pack_builds_a_manifest_entry_the_engine_accepts(self):
+        """No voice is assigned first, on purpose: to_manifest_entry then falls
+        back to the pack's own first voice. That is the path a single video
+        takes, and the batch above never reaches it."""
+        for pack in self.packs:
+            with self.subTest(pack.id):
+                entry = plan_module.to_manifest_entry(_synthetic_brief(pack), pack)
+                self.assertTrue(entry["voice_name"])
+                params = VideoParams(**entry)
+                self.assertEqual(params.video_language, pack.language)
+
+
+class TestPortugueseCounterparts(unittest.TestCase):
+    """A "-pt" pack is one English pack translated, not a new vertical."""
+
+    def setUp(self):
+        self.packs = {pack.id: pack for pack in load_all_niches()}
+        self.translations = sorted(i for i in self.packs if i.endswith("-pt"))
+        # Without a pair to check, both tests below would pass by doing nothing.
+        self.assertTrue(self.translations)
+
+    def test_every_translated_pack_still_has_the_pack_it_translates(self):
+        """The counterpart is found by id, nothing records the link. If the
+        English pack was renamed and its translation was not, the pair is
+        broken from that commit on and the two drift apart unnoticed."""
+        for pack_id in self.translations:
+            with self.subTest(pack_id):
+                self.assertIn(pack_id.removesuffix("-pt"), self.packs)
+
+    def test_no_translated_pack_claims_to_earn_more_than_its_source(self):
+        """Brazilian ad rates are a fraction of US ones for the same views, so
+        a "-pt" pack quoting a higher RPM than its English source is a number
+        someone invented - and packs are listed best RPM first, so the invented
+        one is what the next batch gets planned from."""
+        for pack_id in self.translations:
+            source = self.packs.get(pack_id.removesuffix("-pt"))
+            if source is None:
+                continue  # Already reported by the pairing test.
+            with self.subTest(pack_id):
+                pt_low, pt_high = self.packs[pack_id].economics.rpm_range
+                en_low, en_high = source.economics.rpm_range
+                self.assertLessEqual(pt_low, en_low)
+                self.assertLessEqual(pt_high, en_high)
+
+
 if __name__ == "__main__":
     unittest.main()
 

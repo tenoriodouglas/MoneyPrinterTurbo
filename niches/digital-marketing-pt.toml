@@ -1,0 +1,151 @@
+# pt-BR sibling of digital-marketing.toml. Same editorial shape, two real
+# differences: the ad rate is the Brazilian one, and the guardrails against
+# income claims are tighter, because promising revenue is the failure mode of
+# this genre in Portuguese.
+
+[niche]
+id = "digital-marketing-pt"
+name = "Marketing Digital e Negócio Solo"
+# Free text handed to the model as the narration language.
+language = "pt-BR"
+platforms = ["tiktok", "youtube_shorts"]
+
+[economics]
+# Brazilian market, not the US one. Advertisers here buy in reais and pay a
+# fraction of the US rate for the same view, so the English twin's 12-18 does
+# not transfer and is not copied. Anchored low on purpose: a new pt-BR channel
+# sees the bottom of this band, not the top.
+cpm_low = 2.0
+cpm_high = 5.0
+competition = "high"
+
+[audience]
+description = "Freelancers, autônomos e donos de agência pequena que precisam de cliente neste trimestre e cansaram de conselho que pressupõe verba de tráfego pago."
+pain_points = [
+    "fluxo de clientes irregular, sem nenhuma fonte que se repita",
+    "cobrar por hora e travar o próprio faturamento",
+    "orçamento enviado no WhatsApp que some sem resposta e sem retorno",
+    "correr atrás de todo canal ao mesmo tempo e não terminar nenhum",
+    "proposta descrita pela entrega em vez do resultado que ela gera",
+    "indicação como única porta de entrada, sem controle nenhum sobre o volume",
+]
+
+[content]
+angles = [
+    "oferta: reescrever uma oferta fraca em uma que vende, linha por linha",
+    "precificação: sair da hora e cobrar por resultado, com a conta na mão",
+    "conta-do-canal: o que um canal precisa produzir para valer o tempo que consome",
+    "análise: por onde um funil comum vaza, e em qual etapa",
+    "follow-up: a etapa entre o interesse e o pagamento que quase ninguém monta",
+    "posicionamento: estreitar o público e o que isso faz com a taxa de fechamento",
+    "contraintuitivo: uma tática que só funciona numa escala em que quase ninguém está",
+    "primeiro-cliente: o caminho até um cliente pagante sem ter audiência",
+]
+system_prompt = """
+Você escreve roteiros de narração para um canal de vídeos curtos sem rosto
+sobre conseguir clientes e precificar trabalho como autônomo ou agência
+pequena no Brasil.
+
+Voz: prática, direta, alérgica a linguagem de guru. Você descreve mecanismo,
+nunca resultado.
+
+Regras rígidas:
+- Abra pelo erro ou pelo mecanismo. Sem saudação, sem nome de canal, sem
+  cifra de faturamento.
+- Uma oferta, um canal ou uma decisão de preço por roteiro.
+
+PROIBIDO, sem exceção:
+- Prometer faturamento, receita, lucro, número de clientes, número de
+  seguidores, alcance ou qualquer resultado. Nem direto, nem por insinuação,
+  nem em forma de "dá para chegar a". É esse enquadramento que derruba a
+  categoria inteira.
+- Dizer ou sugerir que um resultado descrito é o típico, o esperado ou o que
+  acontece com quem faz direito.
+- Usar cifra como gancho de abertura.
+- Inventar case, cliente, nome de agência, número de faturamento, print,
+  benchmark de plataforma ou taxa média de mercado. Se você não tem certeza
+  de que o número é real, não use número nenhum: descreva o mecanismo.
+- Vender atalho, fórmula, segredo, método fechado ou garantia.
+
+OBRIGATÓRIO:
+- Quantificar esforço e conversão em termos estruturais: quantas conversas,
+  quantas etapas, qual taxa de fechamento a conta precisa ter para fechar.
+- Todo número que aparecer é número ilustrativo, e você diz em voz alta que
+  é ilustrativo. Valores em reais, nunca em dólar.
+- Dar as palavras exatas quando a redação é o ponto. Um roteiro sobre uma
+  oferta precisa conter a oferta.
+- Dizer no roteiro quando a tática depende de verba de anúncio, de audiência
+  que já existe ou de uma escala que o público ainda não tem.
+- Fechar com a única mudança a fazer antes da próxima conversa com cliente,
+  em forma de instrução. Nunca pedir curtida, seguidor ou comentário.
+- Português brasileiro falado e claro. Sem markdown, sem título, sem emoji,
+  sem rubrica de cena, sem nome de locutor. Devolva apenas as palavras a
+  serem lidas em voz alta.
+"""
+script_guidance = """
+Alvo de 170 a 210 palavras, cerca de 70 a 85 segundos falados em português.
+Não fique abaixo de um minuto.
+Estrutura: o erro, por que ele parece certo, o mecanismo que corrige, a
+redação ou a conta em forma concreta, a única mudança a fazer.
+"""
+# Real pt-BR marketing-guru clichés, not translations of the English list.
+# Matching is case-insensitive substring, so the accents must be the ones a
+# generated script would actually carry.
+banned_phrases = [
+    "fature 10k por mês",
+    "renda passiva",
+    "o algoritmo mudou",
+    "método validado",
+    "6 em 7",
+    "segredo que ninguém te conta",
+    "mentalidade de milionário",
+    "escala infinita",
+    "neste vídeo de hoje",
+]
+seed_topics = [
+    "reescrever uma oferta descrita pela entrega em uma descrita pelo resultado",
+    "a conta que mostra por que cobrar por hora trava o próprio faturamento",
+    "o que um canal de captação precisa produzir para valer o tempo que consome",
+    "a etapa de follow-up entre o interesse e o pagamento que quase ninguém monta",
+    "conseguir o primeiro cliente pagante sem ter audiência nenhuma",
+]
+# Stock search keywords, read by the Pexels API and not by the narrator, so
+# they stay in English even though the narration is pt-BR.
+visual_terms = [
+    "person working laptop cafe",
+    "marketing analytics dashboard",
+    "small business owner shop counter",
+    "freelancer home office desk",
+    "hands typing messaging app phone",
+    "creative team meeting office",
+    "notebook planning strategy",
+    "coworking space city",
+]
+
+[video]
+aspect = "9:16"
+# The English original searches stock footage (the pexels default) rather than
+# generating images, and this pack keeps that choice, so there is no [images]
+# section. Only the voices change.
+voice_names = [
+    "pt-BR-FranciscaNeural",
+    "pt-BR-AntonioNeural",
+    "pt-BR-ThalitaMultilingualNeural",
+]
+font_size = 72
+stroke_width = 3.5
+subtitle_position = "custom"
+custom_position = 62.0
+clip_duration = 4
+paragraph_number = 5
+
+[platform]
+# ASCII on purpose: unaccented tags are what pt-BR creators type and what
+# search matches most reliably across platforms.
+hashtags = ["#marketingdigital", "#freelancer", "#empreendedorismo", "#mei", "#vendas"]
+
+[monetization]
+primary = "service_sales"
+# Operator-facing note, in English like the rest of the pack's commentary.
+notes = "Same play as the English pack in the local market: small Brazilian businesses pay monthly for the videos this repo generates, and the pt-BR shelf is far less served than the English one."
+affiliate_categories = ["done-for-you video service", "marketing SaaS referrals", "template and course sales"]

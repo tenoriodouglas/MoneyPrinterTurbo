@@ -102,6 +102,48 @@ def _check_fonts() -> Check:
     return Check("fonts", OK, "every pack's font is present")
 
 
+def _check_pack_voices() -> Check:
+    """Every voice a pack names must exist in the engine's list.
+
+    The pack files are read here rather than through load_all_niches, which
+    drops a pack whose voices are wrong instead of reporting it: the pack that
+    needs naming is exactly the one that would be missing from the listing.
+    """
+    import tomllib
+
+    from growth.niche import (
+        NICHES_DIR,
+        VOICES_DATA_FILE,
+        known_voice_names,
+        unknown_voice_names,
+    )
+
+    if not known_voice_names():
+        return Check(
+            "voices", WARN, f"cannot read the voice list at {VOICES_DATA_FILE}",
+            f"git checkout -- {VOICES_DATA_FILE}",
+        )
+    for path in sorted(NICHES_DIR.glob("*.toml")):
+        try:
+            with path.open("rb") as handle:
+                raw = tomllib.load(handle).get("video", {}).get("voice_names", [])
+        except (tomllib.TOMLDecodeError, OSError) as exc:
+            return Check("voices", FAIL, f"{path.name}: {exc}"[:150], f"fix the TOML in {path}")
+        if not isinstance(raw, list):
+            return Check(
+                "voices", FAIL, f"{path.name}: [video].voice_names must be a list of strings",
+                f"edit [video].voice_names in {path}",
+            )
+        unknown = unknown_voice_names(str(v).strip() for v in raw)
+        if unknown:
+            return Check(
+                "voices", FAIL,
+                f"{path.name} names voices that do not exist: {', '.join(unknown)}",
+                f"edit [video].voice_names in {path}; the engine's list is {VOICES_DATA_FILE}",
+            )
+    return Check("voices", OK, "every pack's voices exist")
+
+
 def _summarise_provider_error(message: str) -> tuple[str, str]:
     """Reduce a provider error to what the user can act on.
 
@@ -264,7 +306,14 @@ def _check_voice() -> Check:
     return Check("voice", OK, f"edge-tts synthesised {size} bytes")
 
 
-_LOCAL_CHECKS = (_check_python, _check_ffmpeg, _check_disk, _check_config, _check_fonts)
+_LOCAL_CHECKS = (
+    _check_python,
+    _check_ffmpeg,
+    _check_disk,
+    _check_config,
+    _check_fonts,
+    _check_pack_voices,
+)
 _NETWORK_CHECKS = (_check_llm, _check_materials, _check_voice)
 
 

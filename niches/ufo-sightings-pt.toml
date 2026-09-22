@@ -1,0 +1,174 @@
+# pt-BR counterpart of the ufo-sightings pack. Same documentary frame, same
+# render settings; what changes is the market and the case list. Brazilian
+# cases carry this audience the way US cases carry the English one, and the ad
+# rate is a Brazilian rate, which is a different number entirely.
+
+[niche]
+id = "ufo-sightings-pt"
+name = "Relatos de OVNIs (Brasil)"
+# Narration language, not the language the operator types in: it reaches the
+# script model as free text and drives the subtitles, so it has to match the
+# voices below.
+language = "pt-BR"
+platforms = ["tiktok", "youtube_shorts"]
+
+[economics]
+# Brazilian-market figures in USD, well under the English ufo-sightings pack's
+# $3-8: local advertisers bid against a far smaller ad spend per viewer, so the
+# same view count pays roughly a third. Anchored low on purpose, since running
+# both packs is what will replace these estimates with real numbers. Estimates
+# used only to rank packs, never a forecast of earnings.
+cpm_low = 0.8
+cpm_high = 2.5
+competition = "medium"
+
+[audience]
+description = "Quem acha os casos documentados mais interessantes que as teorias: o registro de radar, o depoimento do piloto, o relatório que levou trinta anos para ser liberado."
+pain_points = [
+    "canal que afirma que era alienígena como se fosse fato e perde toda a credibilidade",
+    "os mesmos cinco casos recontados sem um detalhe novo",
+    "imagem genérica de céu estrelado enquanto o narrador descreve uma coisa específica",
+    "nenhuma separação entre o que a testemunha disse e o que foi verificado",
+    "final que promete resposta e entrega pedido de inscrição",
+]
+
+[content]
+angles = [
+    "caso-único: um avistamento documentado, contado do começo ao fim",
+    "depoimento: o que as pessoas em terra relataram, com as palavras delas",
+    "registro-oficial: o que o documento diz, e o que ele deixou de fora",
+    "radar-e-instrumento: os casos com dado registrado, não só com olho",
+    "avistamento-em-massa: o episódio que muita gente viu na mesma hora, e no que os relatos coincidem",
+    "explicado-depois: um caso famoso que acabou tendo resposta",
+    "ainda-aberto: o detalhe específico que nenhuma explicação cobriu",
+    "investigador: quem apurou o caso e a conclusão a que chegou",
+]
+system_prompt = """
+Você escreve roteiros de narração, em português do Brasil, para um canal sem
+rosto sobre relatos documentados de avistamentos de OVNIs.
+
+Voz: um contador de histórias cuidadoso. Você monta a cena, atribui cada
+afirmação a quem a fez e deixa a conclusão para quem escuta.
+
+Regras rígidas:
+- Comece dentro da cena: um lugar, uma hora, uma pessoa e o que ela viu. Sem
+  saudação, sem nome de canal, sem "você já se perguntou".
+- Um avistamento por roteiro. Nunca uma lista de casos.
+- Atribua tudo. "O piloto relatou", "o operador de radar descreveu", "o
+  relatório liberado registrou". Nunca afirme como fato o que foi alegado por
+  uma testemunha.
+- Nunca afirme que o objeto era extraterrestre. A frase honesta é que o objeto
+  não foi identificado, e é exatamente isso que você diz.
+- Dê âncoras concretas: a data, o lugar, quantas testemunhas, quanto tempo
+  durou, que instrumento registrou. Esse detalhe é o apelo inteiro.
+- Inclua a explicação oficial quando houve uma, e diga com todas as letras se
+  ela deu conta do que as testemunhas descreveram.
+- Termine no detalhe específico que segue sem explicação, ou na explicação que
+  resolveu o caso. Nunca peça curtida, seguidor ou comentário.
+- Português brasileiro falado e simples. Sem markdown, sem título, sem emoji,
+  sem rubrica de cena, sem indicação de locutor. Escreva apenas as palavras que
+  serão lidas em voz alta.
+
+Regras de precisão, que aqui pesam mais do que em qualquer outro tema:
+- Apenas casos públicos e bem documentados. Nunca invente um avistamento, uma
+  testemunha, um nome de lugar, uma data, um número de documento ou um
+  relatório.
+- Se você não tem certeza de que um detalhe é real, deixe o detalhe de fora.
+  Um roteiro mais curto com detalhe sólido vale mais que um mais longo com um
+  detalhe inventado.
+- Não cite pessoa privada viva. Figura pública que depôs oficialmente, e nome
+  de caso amplamente noticiado, pode ser citado.
+- Nunca sugira acobertamento que você não consiga atribuir a um registro
+  público específico.
+"""
+script_guidance = """
+Mire 180 a 220 palavras, o que dá 70 a 85 segundos de narração. O TikTok só
+paga acima de um minuto, então não entregue curto.
+Estrutura: a cena e o momento em que começou, o que as testemunhas
+descreveram, o que instrumento ou autoridade registrou, a explicação que foi
+oferecida e o detalhe que ela não cobriu.
+"""
+banned_phrases = [
+    "neste vídeo de hoje",
+    "você não vai acreditar",
+    "os cientistas não querem que você saiba",
+    "o governo esconde isso de você",
+    "prova de que os alienígenas existem",
+    "os aliens estão entre nós",
+    "prepare-se para se surpreender",
+    "a verdade que ninguém te contou",
+    "inscreva-se no canal",
+    "deixe seu like e comenta aí",
+]
+# Brazilian cases, not the English pack's: these are the ones this audience
+# already half knows, which is what makes the detail land.
+seed_topics = [
+    "o caso de Varginha em 1996 e o que cada testemunha de fato disse",
+    "a Operação Prato, o relatório da Aeronáutica e o que ele não trata",
+    "os relatos de Colares e as versões que os moradores contaram na época",
+    "a noite de 19 de maio de 1986 e o que foi registrado por radar e por pilotos",
+    "as fotos da Barra da Tijuca em 1952 e as análises que vieram depois",
+    "um avistamento em massa relatado por muita gente na mesma hora",
+    "um caso conhecido que uma apuração posterior explicou",
+]
+# Scene descriptions, not keywords: the image model draws what it is told, so
+# these describe a frame rather than a topic. They stay in ENGLISH like the
+# prompt template below, because the image model is what reads them; only the
+# narration is Portuguese.
+visual_terms = [
+    "a lone figure standing in a moonlit pasture looking up at the sky",
+    "three glowing lights hovering in formation above a hillside town at night",
+    "a 1970s military radar room with operators watching a green screen",
+    "an airline cockpit at night with pilots looking through the windscreen",
+    "a small town main square at dusk with people pointing upward",
+    "a stamped military file folder open on a wooden desk",
+    "a riverside village at night with a bright light hanging over the water",
+    "an unpaved highway at night with a bright light following a car",
+]
+
+[video]
+aspect = "9:16"
+# Illustration generated from the script, not stock footage searched by
+# keyword: it is the only way the picture matches what is being narrated.
+video_source = "openai_image"
+# The generator makes one image per search term and stops when the terms run
+# out, covered narration or not. This is how many seconds of narration the
+# term count has to cover; a little above the script's own target so the tail
+# is never short.
+target_seconds = 100
+match_materials_to_script = true
+# The platform offers only three pt-BR neural voices, so all three are used and
+# the rotation is shallower than the English packs' four. There is no fourth.
+voice_names = [
+    "pt-BR-AntonioNeural",
+    "pt-BR-FranciscaNeural",
+    "pt-BR-ThalitaMultilingualNeural",
+]
+voice_rate = 0.95
+font_size = 72
+stroke_width = 3.5
+subtitle_position = "custom"
+custom_position = 62.0
+subtitle_display_mode = "word_by_word"
+subtitle_animation = "pop_spring"
+clip_duration = 5
+paragraph_number = 6
+bgm_volume = 0.18
+
+[images]
+# Pollinations exposes an OpenAI-compatible image endpoint and its Flux model
+# is free, which is what makes an illustrated pack viable at zero cost.
+base_url = "https://gen.pollinations.ai/v1"
+model = "flux"
+# One template across every video is what gives the channel a look of its own.
+# It stays in English on purpose: this string is read by the image model, not
+# by the narrator, and Flux follows English style prompts far more reliably.
+prompt_template = "retro 2D cartoon illustration of {term}, bold black outlines, flat muted colour palette, 1970s comic book style, dramatic night lighting, grainy paper texture, cinematic composition, no text, no lettering"
+
+[platform]
+hashtags = ["#ovni", "#ufo", "#ufologia", "#avistamento", "#casosreais"]
+
+[monetization]
+primary = "affiliate"
+notes = "A receita de anúncio no mercado brasileiro é bem menor que a do pack em inglês para as mesmas views, então o retorno vem de retenção, volume e de livros, documentários e produtos, não do CPM."
+affiliate_categories = ["livros e documentários", "assinaturas de streaming", "produtos do canal"]

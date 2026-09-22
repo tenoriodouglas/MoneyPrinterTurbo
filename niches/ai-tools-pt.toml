@@ -1,0 +1,151 @@
+# Brazilian-Portuguese edition of the ai-tools pack. Same editorial spine, a
+# different market: the tools are priced in dollars and billed to a Brazilian
+# card, the field is far more crowded in Portuguese than in English, and the
+# ad rates are a fraction of the US ones.
+
+[niche]
+id = "ai-tools-pt"
+name = "Ferramentas de IA e Automação na Prática"
+# Free text handed to the script model as the target language.
+language = "pt-BR"
+platforms = ["tiktok", "youtube_shorts"]
+
+[economics]
+# Brazilian-market figures, NOT the $8-20 of the English pack. Advertisers pay
+# a small fraction of US rates for the same view here, and short-form pays less
+# than long-form on top of that. Deliberately conservative estimates.
+cpm_low = 2.0
+cpm_high = 5.0
+# Higher than the English pack: every marketing channel in Brazil pivoted into
+# AI-tool content, so the local field is crowded even though the rates are low.
+competition = "high"
+
+[audience]
+description = "Autônomos, freelancers e donos de negócio pequeno no Brasil que ouvem todo dia que a IA economiza tempo, mas nunca viram um fluxo de trabalho inteiro funcionando do começo ao fim."
+pain_points = [
+    "excesso de ferramentas e nenhum critério para decidir o que vale aprender",
+    "demonstração que impressiona no vídeo e quebra no trabalho de verdade",
+    "assinatura cobrada em dólar no cartão, com câmbio e imposto mudando o custo real",
+    "ferramenta que vai bem em inglês e erra em português, principalmente em áudio",
+    "dúvida de privacidade e de LGPD que ninguém responde de forma direta",
+    "nenhuma noção de quanto uma tarefa passa a custar depois de automatizada",
+]
+
+[content]
+angles = [
+    "fluxo: uma tarefa real, do começo ao fim, com o tempo que ela economiza",
+    "comparação: duas ferramentas na mesma tarefa, diga qual ganha e por quê",
+    "onde quebra: em que essa categoria de ferramenta falha e o que fazer no lugar",
+    "custo: quanto a automação custa por mês contra a hora feita na mão",
+    "antes e depois: a tarefa como era, a tarefa como ficou",
+    "subutilizado: um recurso que a pessoa já paga e nunca abriu",
+    "mito: uma afirmação confiante sobre IA que não sobrevive ao teste",
+    "montagem: construir algo útil no tempo deste vídeo",
+    "português: onde a ferramenta piora quando o texto ou o áudio não é em inglês",
+]
+system_prompt = """
+Você escreve roteiros de narração para um canal de vídeos curtos, sem rosto,
+sobre usar ferramentas de IA em trabalho de verdade.
+
+Tom: prático, específico, um pouco cético. Você usou a ferramenta. Você não
+está vendendo nada.
+
+Regras obrigatórias:
+- Comece pelo resultado concreto ou pela falha concreta. Sem saudação, sem "a
+  IA está mudando tudo", sem nome de canal.
+- Um fluxo de trabalho ou uma comparação por roteiro. Nunca uma lista de dez
+  ferramentas.
+- Quantifique: minutos economizados, custo por mês, número de passos
+  eliminados. Se o número for estimativa, diga que é estimativa.
+- Diga onde a coisa falha. É a limitação declarada que dá valor à indicação.
+- Descreva os passos na ordem em que alguém faria de verdade.
+- Feche com o primeiro passo a testar, escrito como instrução. Nunca peça
+  curtida, inscrição, salvamento ou comentário.
+- Português do Brasil falado, direto, sem gíria de nicho e sem estrangeirismo
+  desnecessário. Sem markdown, sem título, sem emoji, sem rubrica de cena, sem
+  nome de locutor. Escreva apenas as palavras que serão lidas em voz alta.
+
+Regras de validade, as que mais importam neste canal:
+- Conteúdo sobre IA envelhece em semanas. Nome de modelo, número de versão,
+  preço e limite de plano gratuito mudam logo depois da publicação, e o vídeo
+  continua no ar repetindo o valor antigo para sempre.
+- Explique o que aquela categoria de ferramenta faz e como julgar uma: o que
+  testar primeiro, em que ela costuma falhar, quanto tempo o teste leva. Não
+  afirme preço atual, limite de plano gratuito, versão nem nome de modelo como
+  se fosse fato.
+- Se um número parecer indispensável, diga como o ouvinte confere por conta
+  própria antes de assinar, em vez de cravar o número.
+- Nunca invente funcionalidade, preço nem resultado de benchmark. Descreva a
+  capacidade em termos gerais em vez de afirmar detalhes que você não pode
+  verificar, e prefira o fluxo de trabalho ao nome da marca.
+- Ferramenta estrangeira é cobrada em dólar no cartão: o custo em reais depende
+  do câmbio e dos impostos do dia. Não converta para reais como valor fixo.
+"""
+script_guidance = """
+Mire 170-210 palavras, algo entre 65 e 80 segundos de narração. Não fique
+abaixo de um minuto: é o piso de monetização do TikTok.
+Estrutura: o resultado, o custo manual que ele substitui, o fluxo em passos, a
+limitação honesta, o primeiro passo a testar.
+"""
+# Real Brazilian tech-content clichés, not translations of the English list.
+# Only the first eight reach the script prompt; review checks all of them.
+banned_phrases = [
+    "essa ferramenta vai mudar sua vida",
+    "ninguém está falando disso",
+    "a IA que vai substituir seu trabalho",
+    "no vídeo de hoje",
+    "o segredo que ninguém te conta",
+    "você não vai acreditar",
+    "salva esse vídeo",
+    "bora lá",
+    "fala, galera",
+    "isso é revolucionário",
+]
+seed_topics = [
+    "transformar uma pasta de anotações bagunçadas em um resumo pesquisável",
+    "a tarefa repetitiva que quase todo mundo ainda faz na mão toda semana",
+    "onde a transcrição automática erra em português e como perceber a tempo",
+    "quanto custa por mês, em dólar no cartão, uma automação pequena",
+    "a diferença entre uma demonstração que impressiona e uma que aguenta trabalho real",
+    "como testar uma ferramenta em meia hora antes de assinar qualquer coisa",
+]
+# Stock-footage search keywords, kept in English on purpose: the pack renders
+# from Pexels (see [video]), whose search is English, while the narration is
+# pt-BR. Same list as the English pack.
+visual_terms = [
+    "computer code screen",
+    "data server room",
+    "person typing keyboard closeup",
+    "abstract network connections",
+    "modern workspace monitor",
+    "circuit board macro",
+    "robot arm technology",
+    "digital interface hologram",
+]
+
+[video]
+# Mirrors ai-tools.toml apart from the voices. The English pack renders from
+# stock footage (video_source defaults to pexels), so this one does too: no
+# [images] block, no generated visuals.
+aspect = "9:16"
+# The engine ships exactly three pt-BR voices; all three are used so a batch
+# does not sound like one template read N times.
+voice_names = [
+    "pt-BR-AntonioNeural",
+    "pt-BR-FranciscaNeural",
+    "pt-BR-ThalitaMultilingualNeural",
+]
+font_size = 72
+stroke_width = 3.5
+subtitle_position = "custom"
+custom_position = 62.0
+clip_duration = 4
+paragraph_number = 5
+
+[platform]
+hashtags = ["#ferramentasdeia", "#inteligenciaartificial", "#produtividade", "#automacao", "#tecnologia"]
+
+[monetization]
+primary = "affiliate"
+notes = "SaaS affiliate programmes pay recurring commission in USD, which helps, but a Brazilian audience converts worse on a dollar-priced subscription than a US one. Expect more of the revenue to come from courses, templates and local products than from international SaaS referrals."
+affiliate_categories = ["SaaS referrals", "course and template sales", "newsletter sponsorships"]

@@ -1,0 +1,161 @@
+# Brazilian-market version of the real-estate pack. Stock footage is kept, as
+# in the English original. Two things drive the rules here: advertiser rates in
+# Brazil are a fraction of US rates, and property costs are local -- ITBI is
+# set by the município, registry fees by the estado, financing terms by the
+# bank -- so the pack describes the mechanism and sends the viewer to check the
+# number instead of asserting one.
+
+[niche]
+id = "real-estate-pt"
+name = "Mercado Imobiliário e Economia do Imóvel"
+# Free text passed to the model as the narration language; the voices below
+# are the pt-BR ones, so the script and the audio agree.
+language = "pt-BR"
+platforms = ["tiktok", "youtube_shorts"]
+
+[economics]
+# Brazilian-market figures in USD, well under the English real-estate pack's
+# $10-16: local advertiser rates are far below US rates for the same view.
+# Estimates used only to rank packs, never a forecast of earnings.
+cpm_low = 2.5
+cpm_high = 5.0
+competition = "medium"
+
+[audience]
+description = "Quem está comprando o primeiro imóvel e pequenos proprietários que alugam: entendem o preço anunciado, não o custo de carregar, e decidem centenas de milhares de reais no instinto."
+pain_points = [
+    "avaliar se cabe no orçamento apenas pelo valor da parcela",
+    "esquecer ITBI, escritura, registro, mudança e reforma na conta da compra",
+    "confundir valorização do imóvel com retorno",
+    "subestimar vacância, inadimplência e manutenção em um imóvel alugado",
+    "tratar alugar ou comprar como identidade, e não como conta",
+    "assinar o financiamento olhando a taxa anunciada e não o custo efetivo total",
+]
+
+[content]
+angles = [
+    "custo real: a despesa que o comprador deixa de fora da conta",
+    "alugar ou comprar: a conta feita direito, com o ponto de equilíbrio",
+    "mecanismo: como uma mudança de juros move o quanto se consegue financiar",
+    "dois cenários: mesmo imóvel, dois arranjos de financiamento, desfechos diferentes",
+    "mito: uma regra de bolso do mercado imobiliário que não resiste à conta",
+    "fluxo de caixa: o que sobra do aluguel depois do que ninguém filma",
+    "tempo: por que esperar o preço cair pode custar mais do que economiza",
+    "documento e vistoria: o detalhe da matrícula ou da obra que mais muda o número",
+]
+system_prompt = """
+Você escreve roteiros de narração para um canal de vídeos curtos sobre
+economia do imóvel no Brasil. O canal é informativo: faz a aritmética que o
+comprador pula e nunca diz a ninguém o que comprar.
+
+Voz: analítica, calma, levemente corretiva. Você separa preço de custo.
+
+Regras de conteúdo:
+- Abra pelo número que muda a decisão. Sem saudação, sem nome do canal.
+- Uma conta ou uma decisão por roteiro.
+- Separe sempre preço de custo de carregar. Essa distinção é o canal.
+- Chame o mecanismo pelo nome e explique-o: custo efetivo total, sistema de
+  amortização SAC e Price, financiamento pelo SFH, uso do FGTS na compra,
+  ITBI, escritura e registro em cartório, matrícula do imóvel, condomínio e
+  fundo de reserva, IPTU, reajuste do aluguel por índice contratual,
+  vacância, inadimplência, manutenção.
+- Diga o que cada custo é e quando ele aparece, em vez de quanto ele é.
+- Feche com o número específico que o ouvinte vai conferir e onde conferir:
+  o custo efetivo total na proposta do banco, a alíquota do ITBI na prefeitura,
+  a tabela de custas do cartório, a matrícula atualizada do imóvel, a ata da
+  última assembleia do condomínio. Nunca peça curtida, inscrição ou comentário.
+- Português do Brasil falado e simples. Sem markdown, sem títulos, sem emoji,
+  sem rubrica de cena, sem nome de locutor. Escreva apenas as palavras que
+  serão lidas em voz alta.
+
+Regras regulatórias, que valem mais do que qualquer outra aqui:
+- NUNCA indique um imóvel, empreendimento, construtora, incorporadora,
+  imobiliária, banco, linha de financiamento ou fundo imobiliário específico
+  como a escolha certa. Explicar como uma categoria funciona é permitido;
+  dizer "compre este" não é.
+- NUNCA prometa, projete ou insinue valorização, rentabilidade de aluguel ou
+  retorno futuro. Nada de "valoriza tanto por ano", "se paga em tantos anos",
+  "imóvel não perde valor".
+- NUNCA apresente o roteiro como recomendação personalizada, consultoria ou
+  análise de investimento. Recomendação individual é atividade regulada no
+  Brasil e só pode ser feita por profissional habilitado.
+- NUNCA invente número, taxa, alíquota, limite ou regra jurídica e
+  tributária. ITBI varia por município, custas de cartório variam por estado,
+  taxa e prazo variam por banco e por perfil: se a conta exigir um valor do
+  qual você não tem certeza, descreva o mecanismo e mande o ouvinte conferir
+  na fonte oficial, em vez de afirmá-lo.
+- Use números redondos e ilustrativos quando precisar mostrar uma conta, diga
+  em voz alta que são ilustrativos, e enuncie a premissa em uma oração.
+- Diga, em uma oração, quando a regra depende da situação de cada pessoa:
+  renda, tempo de FGTS, valor do imóvel, município, estado civil, se é o
+  primeiro imóvel, análise de crédito do banco.
+- Deixe explícito, sem juridiquês, que o vídeo é informação e educação, não
+  recomendação de compra nem de investimento, e que contrato, tributo e
+  escritura merecem conferência no cartório, na prefeitura e com profissional
+  habilitado antes da assinatura.
+- Regra e tabela mudam. Ao citar uma, diga que vale conferir a versão vigente.
+"""
+script_guidance = """
+Mire em 165-200 palavras, cerca de 65-80 segundos falados. Fique acima de um
+minuto.
+Estrutura: o número que quase todo mundo erra, o custo que fica de fora, a
+conta corrigida com as premissas ditas em voz alta, o ponto de equilíbrio, e
+qual número o ouvinte vai conferir e onde.
+"""
+banned_phrases = [
+    "imóvel nunca desvaloriza",
+    "aluguel é jogar dinheiro fora",
+    "renda passiva enquanto você dorme",
+    "fique rico com imóveis",
+    "agora é a melhor hora de comprar",
+    "o mercado imobiliário vai quebrar",
+    "o segredo que os bancos escondem",
+    "no vídeo de hoje",
+]
+seed_topics = [
+    "os custos que aparecem depois do preço anunciado: ITBI, escritura e registro",
+    "alugar ou comprar como conta de ponto de equilíbrio, e não como opinião",
+    "SAC e Price: o que muda na parcela e no total de juros pagos",
+    "por que o custo efetivo total diz mais sobre o financiamento do que a taxa anunciada",
+    "o que sobra de um aluguel depois de vacância, manutenção e imposto",
+    "por que só o registro em cartório transfere a propriedade",
+    "o que a matrícula do imóvel revela antes de qualquer assinatura",
+]
+# Stock-footage search keywords read by the footage provider, not by the
+# narrator, so they stay in English; the scenes lean Brazilian where it helps
+# the search return the right country.
+visual_terms = [
+    "modern apartment building facade",
+    "brazilian residential neighborhood aerial",
+    "real estate agent handing over keys",
+    "empty apartment living room",
+    "apartment tower construction site",
+    "signing contract documents close up",
+    "house keys on wooden table",
+    "city skyline residential towers",
+]
+
+[video]
+# Mirrors the English pack, including its stock footage source; only the
+# voices change, and pt-BR offers exactly these three.
+aspect = "9:16"
+voice_names = [
+    "pt-BR-AntonioNeural",
+    "pt-BR-ThalitaMultilingualNeural",
+    "pt-BR-FranciscaNeural",
+]
+font_size = 72
+stroke_width = 3.5
+subtitle_position = "custom"
+custom_position = 62.0
+clip_duration = 4
+paragraph_number = 5
+
+[platform]
+hashtags = ["#imoveis", "#primeiroimovel", "#financiamentoimobiliario", "#mercadoimobiliario", "#educacaofinanceira"]
+
+# Operator-facing notes, kept in English like the other packs.
+[monetization]
+primary = "lead_generation"
+notes = "Correspondente bancário and brokerage referral arrangements pay per qualified lead, which beats ad revenue per view at Brazilian CPMs. Any referral stays outside the script: the pack's rules forbid naming a bank, a development or a financing line as a recommendation."
+affiliate_categories = ["mortgage correspondent referrals", "real estate agency referrals", "property analysis tools", "home insurance referrals"]

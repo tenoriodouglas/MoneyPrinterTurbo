@@ -91,6 +91,14 @@ MAX_FAILURES_SHOWN = 3
 # The pack that carries an arbitrary theme: it supplies the format, the voice
 # and the guardrails, while the theme typed in the chat supplies the subject.
 FREE_THEME_NICHE = "free-theme"
+# Same pack, narrated in the other market's language. Which one a theme gets
+# is a choice, not a default: the operator runs both, and a video in the wrong
+# language is only noticed after twenty minutes of render.
+FREE_THEME_NICHE_PT = "free-theme-pt"
+# Words that pick the Portuguese pack, matched case-insensitively as the first
+# argument. "pt" alone is also a plausible theme, so a bare "/tema pt" is
+# treated as a language with no subject and asks for one.
+PT_FLAGS = frozenset({"pt", "pt-br", "ptbr", "br", "portugues", "português"})
 # Short enough to be a typo, long enough to be a pasted article: neither is a
 # subject, and both waste twenty minutes of render.
 MIN_THEME_CHARS = 3
@@ -553,6 +561,18 @@ class GrowthBot:
                 "Exemplo: <code>/tema a história do café no Brasil</code> ☕"
             )
 
+        # A leading language word picks the pack; everything after it is the
+        # subject. Without this the bot could only ever reach one market.
+        pack_id = FREE_THEME_NICHE
+        if args and args[0].lower().strip(",.") in PT_FLAGS:
+            pack_id = FREE_THEME_NICHE_PT
+            args = args[1:]
+            if not args:
+                return (
+                    "✍️ Faltou o tema depois do <code>pt</code>.\n"
+                    "Tenta <code>/tema pt histórias de assombração</code> 👻"
+                )
+
         theme = " ".join(args).strip()
         if len(theme) < MIN_THEME_CHARS:
             return (
@@ -568,12 +588,12 @@ class GrowthBot:
         # The pack ships with the repo, so a missing one means a server that
         # is out of date. Saying that beats a traceback nobody can read.
         try:
-            niche = load_niche(FREE_THEME_NICHE)
+            niche = load_niche(pack_id)
         except NicheError:
             return (
-                f"🧩 Não achei o pack <code>{FREE_THEME_NICHE}</code>, que é o que dá "
+                f"🧩 Não achei o pack <code>{html.escape(pack_id)}</code>, que é o que dá "
                 "formato aos temas livres.\n"
-                f"Ele precisa estar em <code>niches/{FREE_THEME_NICHE}.toml</code> "
+                f"Ele precisa estar em <code>niches/{html.escape(pack_id)}.toml</code> "
                 "no servidor.\n"
                 "Enquanto isso dá pra usar <code>/run &lt;nicho&gt;</code> — a lista "
                 "está em /niches 🙂"

@@ -1,0 +1,192 @@
+# pt-BR counterpart of the ghost-stories pack. Same folklore frame and same
+# render settings; the legends are the ones told in Brazil rather than the
+# American haunted-hotel shelf, and the ad rate is a Brazilian rate.
+
+[niche]
+id = "ghost-stories-pt"
+name = "Causos de Assombração (Brasil)"
+# Narration language, not the language the operator types in: it reaches the
+# script model as free text and drives the subtitles, so it has to match the
+# voices below.
+language = "pt-BR"
+platforms = ["tiktok", "youtube_shorts"]
+
+[economics]
+# Brazilian-market figures in USD, well under the English ghost-stories pack's
+# $2.5-7: local advertisers bid against a far smaller ad spend per viewer, so
+# the same view count pays roughly a third. A shade under the pt UFO pack for
+# the reason the English packs differ too: the shelf here is more crowded, so a
+# new channel waits longer to see the top of the band. Estimates used only to
+# rank packs, never a forecast of earnings.
+cpm_low = 0.7
+cpm_high = 2.2
+competition = "high"
+
+[audience]
+description = "Quem quer ficar inquieto, não levar susto: gente que conhece a lenda da própria região, pergunta qual versão o pessoal do lugar conta de verdade e fica pelo detalhe silencioso, não pelo grito."
+pain_points = [
+    "narrador que jura que a lenda é fato documentado e cita uma vítima que nunca existiu",
+    "o susto todo empilhado nos três últimos segundos, sem nada construído antes",
+    "história cortada no meio para o final virar parte dois amanhã",
+    "imagem genérica de corredor escuro enquanto se descreve um casarão específico",
+    "sangue no lugar de atmosfera",
+    "as mesmas cinco lendas famosas recontadas sem nenhum detalhe local",
+]
+
+[content]
+angles = [
+    "lugar-de-muitos-relatos: um lugar com décadas de relatos, e o que eles têm em comum",
+    "uma-noite: uma única noite em um único lugar, do começo ao fim",
+    "versão-do-lugar: a versão que a cidade conta contra a versão vendida ao turista",
+    "explicado-depois: um causo conhecido que acabou tendo causa comum",
+    "objeto-assombrado: uma coisa em vez de um prédio, e por onde ela passou",
+    "o-cético: a história contada por quem entrou sem acreditar",
+    "origem-da-lenda: como o causo começou e o que ele foi ganhando pelo caminho",
+    "a-regra: a regra local sobre uma porta, uma estrada ou uma hora, e o causo contado para fazer cumprir",
+]
+system_prompt = """
+Você escreve roteiros de narração, em português do Brasil, para um canal sem
+rosto sobre assombrações, causos e lenda local.
+
+O enquadramento decide todo o resto: são histórias que as pessoas contam. Uma
+lenda, um relato que alguém deu, uma coisa que uma cidade repete há cem anos.
+Você apresenta exatamente assim. Você não está relatando uma constatação, está
+contando o causo do jeito que ele é contado, e quem escuta nunca fica em
+dúvida sobre qual das duas coisas está ouvindo.
+
+Voz: alguém contando uma história tarde da noite, sem pressa, que confia no
+detalhe para fazer o trabalho e nunca levanta o tom para vender um momento.
+
+Regras rígidas:
+- Comece dentro da história: o lugar, a hora, a pessoa e o que ela diz que
+  aconteceu. Sem saudação, sem nome de canal, sem "você já se perguntou".
+- Uma história por roteiro. Nunca uma lista de assombrações.
+- Conte como quem conta, não como quem constata. "Dizem que", "o pessoal que
+  trabalhava lá contava", "a versão que contam no vale". Nunca afirme como
+  fato estabelecido que um lugar é assombrado ou que existe fantasma.
+- A atmosfera é o produto. Construa o medo com detalhe: o frio, o som, a
+  distância, a coisa comum que está levemente errada. O que você segura rende
+  mais que o que você mostra.
+- Termine na imagem que fica com quem ouve. Nunca um susto na última frase,
+  nunca gancho, nunca parte dois, nunca pedido de curtida, seguidor ou
+  comentário. A história acaba dentro deste vídeo.
+- Português brasileiro falado e simples. Sem markdown, sem título, sem emoji,
+  sem rubrica de cena, sem indicação de locutor, sem efeito sonoro escrito.
+  Escreva apenas as palavras que serão lidas em voz alta.
+
+Limites, que são a diferença inteira entre folclore e mentira:
+- Nunca apresente folclore como verificado. Quando a história é muito contada
+  mas não comprovada, diga isso com todas as letras. Não custa nada e é o
+  enquadramento honesto.
+- Nunca invente uma pessoa real com nome, um endereço real ou uma morte real e
+  apresente como documentado. Contar lenda pública conhecida pode: uma lenda
+  regional muito contada, um lugar que vende ingresso em cima da própria
+  história, uma figura do folclore. Fabricar uma vítima real específica não
+  pode, nunca.
+- Não cite, identifique nem localize pessoa privada, viva ou morta. Nenhuma
+  casa de família real, nenhum morador atual, nenhum endereço que alguém possa
+  ir visitar.
+- Sem sangue. Sem cena de crime real, sem assassinato real, sem tragédia
+  recente recontada como entretenimento. Se a história só funciona pela morte
+  de alguém de verdade, não conte.
+- Quando o causo tem explicação comum conhecida, você pode contar o causo e
+  dar a explicação. Nunca esconda uma explicação para preservar o medo.
+"""
+script_guidance = """
+Mire 180 a 220 palavras, o que dá 70 a 85 segundos de narração. O TikTok só
+paga acima de um minuto, então não entregue curto.
+Estrutura: o lugar e quem está nele, o detalhe comum antes de qualquer coisa
+estar errada, a primeira coisa fora do lugar, até onde foi, e a imagem que
+ficou. Gaste mais palavras no meio, que é onde o medo é construído de fato.
+"""
+banned_phrases = [
+    "neste vídeo de hoje",
+    "você não vai acreditar",
+    "prepare-se para se arrepiar",
+    "não assista sozinho",
+    "isso aconteceu de verdade",
+    "o lugar mais assombrado do mundo",
+    "parte dois amanhã",
+    "só para os corajosos",
+    "inscreva-se no canal",
+    "deixe seu like e comenta aí",
+]
+# Brazilian legend, not the American haunted hotel: what this audience grew up
+# hearing is a school corridor, a dirt road, and the folklore of the interior.
+seed_topics = [
+    "a Loira do Banheiro e como a versão muda de escola para escola",
+    "uma figura parada no acostamento de uma estrada, e as versões contadas em estados diferentes",
+    "uma criatura do folclore do interior contada como aviso para quem anda à noite, como a Mula sem Cabeça ou o Boitatá",
+    "um casarão de fazenda antigo e os relatos de quem trabalhou nele por décadas",
+    "a versão que a cidade conta contra a versão vendida ao turista",
+    "um causo que uma explicação comum resolveu por inteiro",
+    "um objeto que carregou a história de dono para dono",
+    "uma regra local sobre uma porta, uma estrada ou uma hora, e o causo contado para fazer cumprir",
+]
+# Scene descriptions, not keywords: the image model draws what it is told, so
+# these describe a frame rather than a topic. They stay in ENGLISH like the
+# prompt template below, because the image model is what reads them; only the
+# narration is Portuguese.
+visual_terms = [
+    "a long corridor of an old colonial school at night lit by one failing wall lamp",
+    "an empty rocking chair on the veranda of an old farmhouse with the shutters closed",
+    "a lone figure holding a lantern at the foot of a dark wooden staircase",
+    "a fog-covered dirt road at night with a single distant streetlight",
+    "an abandoned plantation manor house seen from the treeline under a low grey sky",
+    "an empty tiled school bathroom at night with one mirror and a dripping tap",
+    "a small chapel on a hill in heavy mist with one window still lit",
+    "a tall mirror in an unlit hallway reflecting an open doorway",
+]
+
+[video]
+aspect = "9:16"
+# Illustration generated from the script, not stock footage searched by
+# keyword: it is the only way the picture matches the room being described.
+video_source = "openai_image"
+# The generator makes one image per search term and stops when the terms run
+# out, covered narration or not. This is how many seconds of narration the term
+# count has to cover; a little above the script's own target so the tail is
+# never short.
+target_seconds = 100
+match_materials_to_script = true
+# The platform offers only three pt-BR neural voices, so all three are used and
+# the rotation is shallower than the English packs' four. There is no fourth.
+voice_names = [
+    "pt-BR-AntonioNeural",
+    "pt-BR-ThalitaMultilingualNeural",
+    "pt-BR-FranciscaNeural",
+]
+# Slower than a reporting pack: dread needs the pauses, and a rushed read turns
+# the quiet details into filler.
+voice_rate = 0.92
+font_size = 72
+stroke_width = 3.5
+subtitle_position = "custom"
+custom_position = 62.0
+subtitle_display_mode = "word_by_word"
+subtitle_animation = "pop_spring"
+clip_duration = 5
+paragraph_number = 6
+# The ambient bed does real work in this genre, so it sits a little louder than
+# elsewhere while staying well under the narration.
+bgm_volume = 0.2
+
+[images]
+# Pollinations exposes an OpenAI-compatible image endpoint and its Flux model
+# is free, which is what makes an illustrated pack viable at zero cost.
+base_url = "https://gen.pollinations.ai/v1"
+model = "flux"
+# One template across every video is what gives the channel a look of its own.
+# Shadow carries the dread here, so the style is pushed toward heavy ink and a
+# cold, drained palette rather than the brighter retro look of other packs.
+# It stays in English on purpose: this string is read by the image model, not
+# by the narrator, and Flux follows English style prompts far more reliably.
+prompt_template = "vintage horror comic panel illustration of {term}, heavy black ink shadows, deep chiaroscuro lighting, drained cold palette of slate blue and grey-green, 1950s pulp horror comic style, thick inked linework, moonlight through fog, aged newsprint texture, large areas of darkness, no text, no lettering"
+
+[platform]
+hashtags = ["#historiasdeterror", "#assombracao", "#causos", "#lendaurbana", "#folclorebrasileiro"]
+
+[monetization]
+primary = "affiliate"
+notes = "A receita de anúncio no mercado brasileiro é bem menor que a do pack em inglês para as mesmas views, e o gênero é disputado, então o retorno vem de retenção, compartilhamento e de livros, audiolivros e produtos, não do CPM."
+affiliate_categories = ["livros e audiolivros", "assinaturas de streaming", "produtos do canal"]

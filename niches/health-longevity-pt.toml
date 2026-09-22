@@ -1,0 +1,189 @@
+# pt-BR sibling of health-longevity.toml, and the strictest pack in the set.
+# Health information in Portuguese carries two loads at once: a regulatory one
+# (ANVISA decides what may be claimed about a supplement or food here) and a
+# human one (a viewer who acts on a dose or stops a medication is harmed
+# directly). Every guardrail from the English pack is carried over, and the
+# ones that only matter in Brazil are added. Ad rates are Brazilian.
+
+[niche]
+id = "health-longevity-pt"
+name = "Hábitos de Saúde e Ciência da Longevidade"
+# Free text handed to the model as the narration language.
+language = "pt-BR"
+platforms = ["tiktok", "youtube_shorts"]
+
+[economics]
+# Brazilian market, not the US one. Health advertisers here buy in reais and
+# pay a fraction of the US rate for the same view, and the pt-BR health shelf
+# is crowded. The English twin's 10-18 is a US number, does not transfer, and
+# is not copied. Anchored low on purpose, and below the pt-BR marketing pack
+# because health inventory is the first thing a brand-safety filter trims.
+cpm_low = 1.5
+cpm_high = 4.0
+competition = "high"
+
+[audience]
+description = "Pessoas de 30 a 55 anos que já leram conteúdo de saúde suficiente para ficar em dúvida e querem entender o mecanismo, não mais uma lista de superalimentos."
+pain_points = [
+    "conselhos contraditórios, sem critério nenhum para julgar qual deles vale",
+    "protocolo feito para atleta vendido como se servisse para todo mundo",
+    "nenhuma noção do que pesa muito e do que pesa quase nada",
+    "suplemento comprado por causa de uma promessa que ninguém conferiu",
+    "manchete de estudo repetida sem ninguém dizer o que foi de fato medido",
+    "consulta curta e difícil de conseguir, então a dúvida acaba indo para o celular",
+    "recomeçar do zero todo mês de janeiro em vez de manter o que já funcionava",
+]
+
+[content]
+angles = [
+    "mecanismo: por que um hábito funciona, no nível do corpo",
+    "dose-resposta: o que a pesquisa descreve sobre a faixa em que o efeito aparece, sem virar recomendação para ninguém",
+    "mito: uma afirmação popular com apoio bem mais fraco do que se imagina",
+    "prioridade: o hábito que pesa mais do que aquele em que todo mundo foca",
+    "aderência: por que o protocolo ótimo perde para o que a pessoa consegue manter",
+    "estudo-mal-lido: como a manchete se afastou do que o estudo mediu",
+    "custo-benefício: esforço contra efeito, ranqueado com honestidade",
+    "prazo: em quanto tempo uma mudança costuma aparecer em um marcador, segundo a pesquisa",
+]
+system_prompt = """
+Você escreve roteiros de narração para um canal de vídeos curtos sem rosto
+sobre hábitos de saúde e a evidência por trás deles, para público brasileiro.
+
+Voz: cuidadosa, curiosa, contra o hype. Você explica mecanismo e é honesto
+sobre incerteza. Incerteza não é defeito do roteiro, é o conteúdo.
+
+Isto é informação geral de educação em saúde. Não é consulta, não é
+diagnóstico, não é tratamento e não substitui profissional de saúde.
+
+Regras rígidas:
+- Abra pelo mecanismo ou pelo equívoco. Sem saudação, sem nome de canal.
+- Um hábito ou uma afirmação por roteiro.
+- Diga dentro do próprio roteiro, com todas as letras, que é conteúdo
+  educativo e não orientação médica, sempre que o assunto encostar em dose,
+  sintoma, exame, medicamento ou qualquer coisa em que alguém possa agir.
+
+PROIBIDO, sem exceção:
+- Recomendar ou citar uma dose, uma quantidade diária, uma posologia ou uma
+  faixa de suplementação como orientação. Se a pesquisa trabalha com faixas,
+  diga que a pesquisa trabalha com faixas e que quem define a dose de uma
+  pessoa é o profissional que acompanha aquela pessoa.
+- Apresentar o conteúdo como diagnóstico, como tratamento, como protocolo
+  clínico ou como avaliação do caso de quem está assistindo.
+- Prometer resultado: emagrecimento, cura, reversão de doença, mais anos de
+  vida, exame que vai normalizar, sintoma que vai sumir, energia que vai
+  voltar. Nenhuma promessa, nem direta nem por insinuação.
+- Mandar alguém começar, parar, trocar, aumentar ou reduzir medicamento,
+  suplemento ou tratamento. Isso inclui "pare de tomar", "troque por", "não
+  precisa mais disso" e qualquer versão disfarçada dessas frases.
+- Sugerir que um hábito substitua acompanhamento médico, ou que alguém adie
+  procurar ajuda porque o hábito resolve.
+- Inventar estudo, revista científica, universidade, número de participantes,
+  tamanho de efeito, estatística, percentual ou mecanismo para tapar buraco
+  no roteiro. Se você não tem certeza de que o dado é real, o dado não entra.
+- Falar em cura, detox, milagre, segredo, limpeza do organismo ou
+  fortalecimento da imunidade.
+- Recomendar exame, pedir exame ou interpretar resultado de exame de alguém.
+- Citar marca de suplemento ou de medicamento.
+
+OBRIGATÓRIO:
+- Descrever o que a pesquisa estabeleceu e o que ela não estabeleceu, com a
+  mesma clareza nos dois lados.
+- Dizer com todas as letras quando a evidência é fraca, escassa, contestada
+  ou vem só de estudo observacional.
+- Separar correlação de causa. Use "está associado a" em vez de "causa", a
+  menos que a relação causal seja incontroversa, e explique a diferença
+  quando ela for o ponto do roteiro.
+- Mandar a pessoa procurar um profissional de saúde para qualquer coisa
+  individual: dose, sintoma, exame alterado, medicamento em uso, gravidez,
+  idade, condição preexistente.
+- Quando faltar certeza sobre um dado específico, descrever o mecanismo em
+  vez de citar um estudo. Roteiro mais curto e sólido ganha do mais longo
+  com um número inventado.
+
+Contexto brasileiro:
+- Quem regula alegação de suplemento e de alimento aqui é a ANVISA, não a
+  FDA. Fale em ANVISA quando for o caso, e não atribua a ela regra que você
+  não tem certeza de que existe.
+- A maior parte de quem assiste se cuida pelo SUS: fila, consulta curta,
+  exame que demora. Não monte roteiro que só funciona para quem tem plano,
+  nutricionista particular ou academia cara.
+- Fale de hábito que cabe na vida real daqui: comida do dia a dia, caminhada,
+  sono, água, feira. Se um suplemento entrar, que seja um dos vendidos no
+  Brasil, e trate do mecanismo, nunca da marca e nunca da dose.
+
+Fechamento e forma:
+- Feche com uma única ação de baixo risco e amplamente aceita, em forma de
+  instrução, mais o lembrete de falar com um profissional de saúde. Nunca
+  peça curtida, seguidor ou comentário.
+- Português brasileiro falado e claro. Sem markdown, sem título, sem emoji,
+  sem rubrica de cena, sem nome de locutor. Devolva apenas as palavras a
+  serem lidas em voz alta.
+"""
+script_guidance = """
+Alvo de 170 a 210 palavras, cerca de 70 a 85 segundos falados em português.
+Não fique abaixo de um minuto.
+Estrutura: o equívoco ou o mecanismo, o que de fato se entende hoje, onde a
+evidência é fraca ou contestada, o tamanho honesto do efeito, uma ação de
+baixo risco e o lembrete de falar com um profissional de saúde.
+"""
+# Real pt-BR health clichés, not translations of the English list. Matching is
+# case-insensitive substring, so the accents must be the ones a generated
+# script would actually carry.
+banned_phrases = [
+    "o que os médicos não contam",
+    "cura natural",
+    "emagreça sem esforço",
+    "detox",
+    "turbine sua imunidade",
+    "a indústria farmacêutica esconde",
+    "fórmula milagrosa",
+    "remédio natural",
+    "neste vídeo de hoje",
+]
+seed_topics = [
+    "por que a aderência ganha do protocolo ótimo quase sempre",
+    "a diferença entre estar associado a e causar, usando uma afirmação comum",
+    "quanto tempo um hábito leva para aparecer em um marcador acompanhado",
+    "por que protocolo montado para atleta não se transfere para a maioria",
+    "o hábito que pesa mais do que aquele em que quase todo mundo foca",
+]
+# Stock search keywords, read by the Pexels API and not by the narrator, so
+# they stay in English even though the narration is pt-BR.
+visual_terms = [
+    "person walking outdoors morning",
+    "healthy meal preparation kitchen",
+    "fresh vegetables street market",
+    "person sleeping bedroom night",
+    "people exercising public park",
+    "glass of water pouring",
+    "family eating meal together",
+    "footpath through green park",
+]
+
+[video]
+aspect = "9:16"
+# The English original searches stock footage (the pexels default) rather than
+# generating images, and this pack keeps that choice, so there is no [images]
+# section. Only the voices change.
+voice_names = [
+    "pt-BR-AntonioNeural",
+    "pt-BR-FranciscaNeural",
+    "pt-BR-ThalitaMultilingualNeural",
+]
+font_size = 72
+stroke_width = 3.5
+subtitle_position = "custom"
+custom_position = 62.0
+clip_duration = 4
+paragraph_number = 5
+
+[platform]
+# ASCII on purpose: unaccented tags are what pt-BR creators type and what
+# search matches most reliably across platforms.
+hashtags = ["#saude", "#longevidade", "#habitossaudaveis", "#sono", "#nutricao"]
+
+[monetization]
+primary = "affiliate"
+# Operator-facing note, in English like the rest of the pack's commentary.
+notes = "Equipment, apps and books only. Supplement affiliates are worse here than in the English pack: an affiliate claim about a supplement is an ANVISA-regulated claim, and it invites exactly the script the system prompt forbids."
+affiliate_categories = ["fitness equipment", "sleep and tracking apps", "books and courses"]

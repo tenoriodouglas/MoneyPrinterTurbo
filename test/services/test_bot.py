@@ -14,6 +14,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
 from growth import bot as bot_module
 from growth.bot import BotError, GrowthBot, load_settings, poll_forever
+from growth.niche import NicheError
 
 OWNER = 111
 STRANGER = 222
@@ -785,6 +786,89 @@ class TestConfigIsReadFresh(unittest.TestCase):
                     bot.handle(_message("/run ufo-sightings"))
                     self.assertTrue(_wait_idle(bot))
         self.assertEqual(plan.call_args.kwargs["app_config"], {"y": 2})
+
+
+class TestFreeThemeLanguage(unittest.TestCase):
+    """The owner runs both markets. A theme that can only ever reach the
+    English pack leaves half of that unreachable from the phone, and a video
+    in the wrong language is only noticed after twenty minutes of render."""
+
+    def _started(self, client, text):
+        seen = []
+        bot = _bot(client, runner=lambda n, c, **_: seen.append(n) or {})
+        with patch("app.services.material.is_openai_image_enabled", return_value=True):
+            bot.handle(_message(text))
+            self.assertTrue(_wait_idle(bot))
+        return seen
+
+    def test_a_plain_theme_uses_the_english_pack(self):
+        client = FakeClient()
+        self.assertEqual(
+            self._started(client, "/tema shipwrecks of the south atlantic"),
+            [bot_module.FREE_THEME_NICHE],
+        )
+
+    def test_a_leading_pt_picks_the_portuguese_pack(self):
+        client = FakeClient()
+        self.assertEqual(
+            self._started(client, "/tema pt histórias de assombração"),
+            [bot_module.FREE_THEME_NICHE_PT],
+        )
+
+    def _job_of(self, text):
+        """Capture the job while it is still running.
+
+        Reading bot._job after handle() races the render thread: with an
+        instant runner the job is already cleared, and the test then asserts
+        against empty strings instead of failing.
+        """
+        client = FakeClient()
+        captured = {}
+        release = threading.Event()
+
+        def runner(niche_id, count, **_):
+            captured["niche_id"] = niche_id
+            release.wait(timeout=5)
+            return {"succeeded": 0, "total": 0, "records": []}
+
+        bot = _bot(client, runner=runner)
+        with patch("app.services.material.is_openai_image_enabled", return_value=True):
+            bot.handle(_message(text))
+            deadline = time.monotonic() + 5
+            while time.monotonic() < deadline and "niche_id" not in captured:
+                time.sleep(0.01)
+            with bot._lock:
+                if bot._job is not None:
+                    captured["theme"] = bot._job.theme
+            release.set()
+            self.assertTrue(_wait_idle(bot))
+        return captured
+
+    def test_the_language_word_is_not_part_of_the_subject(self):
+        """Left in, every Portuguese video would be about the word "pt"."""
+        self.assertEqual(
+            self._job_of("/tema pt naufrágios no litoral").get("theme"),
+            "naufrágios no litoral",
+        )
+
+    def test_a_language_word_with_no_subject_asks_for_one(self):
+        client = FakeClient()
+        started = self._started(client, "/tema pt")
+        self.assertEqual(started, [])
+        self.assertIn("Faltou o tema", client.texts_to(OWNER))
+
+    def test_a_subject_that_merely_starts_with_a_language_word_survives(self):
+        """"brasilia" begins with a flag word only if matching is careless."""
+        captured = self._job_of("/tema brasilia architecture")
+        self.assertEqual(captured.get("niche_id"), bot_module.FREE_THEME_NICHE)
+        self.assertEqual(captured.get("theme"), "brasilia architecture")
+
+    def test_a_missing_pack_is_named_rather_than_crashing(self):
+        client = FakeClient()
+        bot = _bot(client)
+        with patch.object(bot_module, "load_niche", side_effect=NicheError("no such pack")):
+            bot.handle(_message("/tema pt qualquer coisa"))
+        self.assertIn(bot_module.FREE_THEME_NICHE_PT, client.texts_to(OWNER))
 
 
 class TestLastCommand(unittest.TestCase):

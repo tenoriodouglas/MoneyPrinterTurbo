@@ -1,0 +1,157 @@
+# Brazilian-Portuguese edition of the b2b-software pack. The English original
+# assumes a US buying process: a team, a budget, a procurement step. This one
+# assumes the Brazilian small-company reality instead: MEI and micro-company
+# owners, an accountant in the loop, Pix and card fees, municipal invoicing,
+# and software bought out of the owner's own pocket.
+
+[niche]
+id = "b2b-software-pt"
+name = "Software B2B e Operação de Empresa Pequena"
+# Free text handed to the script model as the target language.
+language = "pt-BR"
+platforms = ["tiktok", "youtube_shorts"]
+
+[economics]
+# Brazilian-market figures, NOT the $12-18 of the English pack. B2B advertisers
+# do pay above general content here as well, but nowhere near US rates, and
+# short-form pays less than long-form on top of that. Conservative estimates.
+cpm_low = 3.0
+cpm_high = 7.0
+# Operations content in Portuguese is thin; most of the local field is
+# motivational business content, not process work.
+competition = "low"
+
+[audience]
+description = "Quem toca a operação de uma empresa pequena no Brasil: MEI, dono de micro e pequena empresa, sócio de agência, gestor de escritório. Compra software com o próprio dinheiro e resolve processo sem time de TI."
+pain_points = [
+    "assinaturas sobrepostas que ninguém audita, várias cobradas em dólar no cartão",
+    "processo que mora na cabeça de uma pessoa só e some junto com ela",
+    "taxa de maquininha e custo de antecipação corroendo a margem sem ninguém olhar",
+    "conciliar Pix, boleto e cartão na mão toda semana",
+    "nota fiscal de serviço presa na regra da prefeitura e no ritmo do contador",
+    "escolher um sistema de gestão pela demonstração e se arrepender no terceiro mês",
+    "relatório manual que come um dia de trabalho por semana",
+]
+
+[content]
+angles = [
+    "auditoria de custo: a linha de despesa que quase ninguém abre no fim do mês",
+    "processo: um fluxo reescrito para sobreviver à saída de quem o fazia",
+    "erro de compra: a etapa de avaliação que o dono pula e paga depois",
+    "número: o indicador que mostra que o processo está quebrado",
+    "taxas: quanto a forma de receber custa por mês, comparada na mesma conta",
+    "migração: o que custa sair de um sistema, além da mensalidade",
+    "contador: o que dá para resolver antes de mandar o mês para ele",
+    "delegação: a primeira tarefa a passar adiante e como documentar",
+    "na contramão: uma boa prática que está errada abaixo de certo tamanho de empresa",
+    "crescimento: o que muda na operação quando a empresa deixa de caber no MEI",
+]
+system_prompt = """
+Você escreve roteiros de narração para um canal de vídeos curtos, sem rosto,
+sobre tocar empresa pequena no Brasil e comprar software para ela.
+
+Tom: de operador para operador. Concreto, sem glamour, um pouco direto demais.
+Você já rodou o processo, não leu sobre ele.
+
+Regras obrigatórias:
+- Comece pelo custo, pela falha ou pelo número. Sem saudação, sem "se você é
+  empreendedor", sem nome de canal.
+- Um processo ou uma decisão por roteiro. Nunca uma lista.
+- Quantifique em horas por semana, reais por mês ou tamanho de equipe. Um
+  número sem unidade não entra no roteiro.
+- Diga o limite onde o conselho se inverte. "Isso funciona até três pessoas" é
+  o tipo de precisão que compra confiança.
+- Diga o que a recomendação custa. Toda escolha tem um preço do outro lado.
+- Feche com a auditoria ou o passo específico para rodar esta semana, escrito
+  como instrução. Nunca peça curtida, inscrição, salvamento ou comentário.
+- Português do Brasil falado, direto, sem jargão corporativo importado. Sem
+  markdown, sem título, sem emoji, sem rubrica de cena, sem nome de locutor.
+  Escreva apenas as palavras que serão lidas em voz alta.
+
+Regras de exatidão, porque o ouvinte age com dinheiro dele:
+- Não invente preço de fornecedor, taxa, participação de mercado nem resultado
+  de pesquisa. Use uma conta que o ouvinte possa refazer, ou diga na hora que o
+  número é ilustrativo.
+- Regra fiscal e tributária muda, e o vídeo continua no ar depois disso. Não
+  crave limite de faturamento do MEI, alíquota do Simples Nacional, prazo de
+  obrigação nem regra de prefeitura como se fosse fato. Diga o que a regra
+  governa e mande conferir com o contador ou no portal oficial.
+- Taxa de maquininha, custo de antecipação de recebíveis e tarifa de Pix para
+  pessoa jurídica variam por provedor e por contrato. Ensine a achar o número
+  no extrato, não dê o número.
+- Cite ferramenta pelo que ela faz e pelo critério de escolha. Não afirme preço
+  atual, plano nem funcionalidade de um produto específico, porque isso muda e
+  o roteiro não.
+- Ferramenta estrangeira é cobrada em dólar no cartão: o custo em reais depende
+  do câmbio e dos impostos do dia. Não converta como valor fixo.
+"""
+script_guidance = """
+Mire 170-210 palavras, algo entre 65 e 80 segundos de narração. Não fique
+abaixo de um minuto.
+Estrutura: o custo ou a falha, por que o arranjo comum produz isso, a correção
+como processo, o tamanho de empresa em que o conselho deixa de valer, e a
+auditoria para rodar.
+"""
+# Real Brazilian business-content clichés, not translations of the English
+# list. Only the first eight reach the script prompt; review checks all.
+banned_phrases = [
+    "no vídeo de hoje",
+    "fala, empreendedor",
+    "isso vai mudar o seu negócio",
+    "mindset de crescimento",
+    "virar a chave",
+    "escalar o negócio",
+    "sair da zona de conforto",
+    "o segredo que ninguém te conta",
+    "no final das contas",
+    "bora lá",
+]
+seed_topics = [
+    "a auditoria de assinaturas que quase nenhuma empresa pequena já rodou",
+    "por que documentar um processo rende mais que contratar mais uma pessoa",
+    "o custo de receber: comparar maquininha, Pix e boleto na mesma conta",
+    "a etapa de avaliação que o dono pula ao escolher um sistema de gestão",
+    "o relatório manual que consome um dia por semana sem ninguém perceber",
+    "o que dá para organizar antes de mandar o mês para o contador",
+    "o tamanho de equipe em que o processo informal para de funcionar",
+]
+# Stock-footage search keywords, kept in English on purpose: the pack renders
+# from Pexels (see [video]), whose search is English, while the narration is
+# pt-BR. Same list as the English pack.
+visual_terms = [
+    "business meeting office",
+    "spreadsheet data screen",
+    "team collaboration whiteboard",
+    "modern office interior",
+    "handshake business deal",
+    "laptop analytics dashboard",
+    "warehouse logistics operation",
+    "city business district",
+]
+
+[video]
+# Mirrors b2b-software.toml apart from the voices. The English pack renders
+# from stock footage (video_source defaults to pexels), so this one does too:
+# no [images] block, no generated visuals.
+aspect = "9:16"
+# The engine ships exactly three pt-BR voices; all three are used so a batch
+# does not sound like one template read N times.
+voice_names = [
+    "pt-BR-AntonioNeural",
+    "pt-BR-FranciscaNeural",
+    "pt-BR-ThalitaMultilingualNeural",
+]
+font_size = 72
+stroke_width = 3.5
+subtitle_position = "custom"
+custom_position = 62.0
+clip_duration = 4
+paragraph_number = 5
+
+[platform]
+hashtags = ["#pequenaempresa", "#gestao", "#mei", "#processos", "#empreendedorismo"]
+
+[monetization]
+primary = "lead_generation"
+notes = "Same framing as the English pack, and it matters more here: this audience buys, and one consulting or done-for-you client is worth more than a year of ad revenue at this channel size. The Brazilian CPM above is low enough that ad income should not be the reason to run this pack."
+affiliate_categories = ["Brazilian SaaS referrals", "consulting leads", "template and SOP sales"]

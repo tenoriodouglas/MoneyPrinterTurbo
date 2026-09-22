@@ -8,7 +8,10 @@ file, not a patch.
 
 from __future__ import annotations
 
+import difflib
+import json
 import tomllib
+from collections.abc import Iterable
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
@@ -16,6 +19,34 @@ from typing import Any
 from loguru import logger
 
 NICHES_DIR = Path(__file__).resolve().parent.parent / "niches"
+
+# The engine's voice catalogue. app/services/voice.py reads this same file
+# (_load_azure_voices) and, for an Edge TTS voice, hands the name straight to
+# edge-tts, so these are the names that exist at render time. It is read here
+# as plain JSON rather than through app.services.voice, which pulls in moviepy,
+# openai and config.toml; `growth niches` must run with no engine config.
+VOICES_DATA_FILE = (
+    Path(__file__).resolve().parent.parent
+    / "app" / "services" / "data" / "azure_voices.json"
+)
+# Prefixes app/services/voice.py routes away from edge-tts (is_azure_v1_voice).
+# Those providers resolve names against their own service, so a pack using one
+# is passed through unchecked rather than judged against the Azure list.
+_OTHER_VOICE_PROVIDERS = (
+    "siliconflow:",
+    "gemini:",
+    "mimo:",
+    "minimax:",
+    "elevenlabs:",
+    "chatterbox:",
+    "kokoro:",
+    "fish_audio:",
+    "voxcpm:",
+)
+# voice.is_no_voice: the explicit "render silent" sentinels.
+_NO_VOICE_NAMES = {"no-voice", "none"}
+# Parsed once per process; eight packs must not mean eight reads.
+_voice_names_cache: frozenset[str] | None = None
 
 # Aspect ratios the render engine accepts (app/models/schema.py VideoAspect).
 _VALID_ASPECTS = {"9:16", "16:9", "1:1"}
@@ -150,6 +181,55 @@ def _as_tuple(value: Any, section: str, key: str) -> tuple[str, ...]:
     return cleaned
 
 
+def known_voice_names() -> frozenset[str]:
+    """Every voice name the engine ships, cached for the process.
+
+    Empty when the catalogue cannot be read. Callers treat that as "cannot
+    verify": one unreadable data file must not stop every pack from loading.
+    """
+    global _voice_names_cache
+    if _voice_names_cache is None:
+        try:
+            with VOICES_DATA_FILE.open("r", encoding="utf-8") as handle:
+                entries = json.load(handle)
+            _voice_names_cache = frozenset(
+                str(entry["name"])
+                for entry in entries
+                if isinstance(entry, dict) and entry.get("name")
+            )
+        except (OSError, ValueError, TypeError) as exc:
+            logger.warning(
+                f"cannot read the voice list at {VOICES_DATA_FILE}: {exc}; "
+                "pack voices will not be checked"
+            )
+            _voice_names_cache = frozenset()
+    return _voice_names_cache
+
+
+def unknown_voice_names(names: Iterable[str]) -> list[str]:
+    """The given voices the engine has no entry for, in the order given."""
+    known = known_voice_names()
+    if not known:
+        return []
+    unknown = []
+    for name in names:
+        if name.lower() in _NO_VOICE_NAMES or name.startswith(_OTHER_VOICE_PROVIDERS):
+            continue
+        # voice.parse_voice_name: the gender suffix is a label, not part of
+        # the name edge-tts is asked for.
+        bare = name.replace("-Female", "").replace("-Male", "").strip()
+        if bare not in known:
+            unknown.append(name)
+    return unknown
+
+
+def _voice_suggestion(name: str) -> str:
+    """Closest catalogue entries to a rejected voice, as a message suffix."""
+    bare = name.replace("-Female", "").replace("-Male", "").strip()
+    close = difflib.get_close_matches(bare, sorted(known_voice_names()), n=3, cutoff=0.5)
+    return f" (did you mean {', '.join(close)}?)" if close else ""
+
+
 def _build_video_defaults(raw: dict[str, Any]) -> VideoDefaults:
     defaults = VideoDefaults()
     aspect = raw.get("aspect", defaults.aspect)
@@ -158,11 +238,18 @@ def _build_video_defaults(raw: dict[str, Any]) -> VideoDefaults:
     voices = raw.get("voice_names", list(defaults.voice_names))
     if not isinstance(voices, list) or not all(isinstance(v, str) for v in voices):
         raise NicheError("[video].voice_names must be a list of strings")
+    # Rotating voices across a batch keeps a channel from sounding like one
+    # template read N times.
+    voice_names = tuple(v.strip() for v in voices if v.strip())
+    # A name the engine does not have only fails at the audio stage, minutes
+    # into a render, as a provider error that never says "voice".
+    unknown = unknown_voice_names(voice_names)
+    if unknown:
+        detail = ", ".join(f"{name!r}{_voice_suggestion(name)}" for name in unknown)
+        raise NicheError(f"[video].voice_names has unknown voices: {detail}")
     return VideoDefaults(
         aspect=aspect,
-        # Rotating voices across a batch keeps a channel from sounding like
-        # one template read N times.
-        voice_names=tuple(v.strip() for v in voices if v.strip()),
+        voice_names=voice_names,
         voice_rate=float(raw.get("voice_rate", defaults.voice_rate)),
         font_name=str(raw.get("font_name", defaults.font_name)),
         font_size=int(raw.get("font_size", defaults.font_size)),
