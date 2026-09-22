@@ -6,7 +6,7 @@ import re
 import shutil
 import subprocess
 import tempfile
-from time import perf_counter
+from time import perf_counter, sleep
 from typing import List
 
 from loguru import logger
@@ -799,6 +799,15 @@ def generate_script(
             if final_script and "当日额度已消耗完" in final_script:
                 raise ValueError(final_script)
 
+            # A provider failure arrives here as a string, not an exception, so
+            # it has to be recognised or it breaks the loop as if it were a
+            # script. The text is kept either way: the caller reads it to
+            # decide which stage failed and why.
+            if _is_retryable(final_script) and i < _max_retries - 1:
+                logger.warning(f"provider failed transiently: {final_script}")
+                sleep(_RETRY_BACKOFF_SECONDS * (i + 1))
+                continue
+
             if final_script:
                 break
         except Exception as e:
@@ -811,6 +820,39 @@ def generate_script(
     else:
         logger.success(f"completed: \n{final_script}")
     return final_script.strip()
+
+
+# Markers of a failure that a second attempt can clear. _generate_response
+# reports every provider failure as a string rather than raising, so without
+# this the retry loops below read an error as a perfectly good answer and stop
+# on the first attempt: five retries configured, none ever run, and a one
+# second blip costs a twenty minute render. Anything unlisted (a bad key, an
+# unknown model) is permanent, and retrying it only spends quota.
+_RETRYABLE_MARKERS = (
+    "429",
+    "500",
+    "502",
+    "503",
+    "504",
+    "rate limit",
+    "rate_limit",
+    "timeout",
+    "timed out",
+    "overloaded",
+    "temporarily",
+    "try again",
+    "connection",
+    "unavailable",
+)
+_RETRY_BACKOFF_SECONDS = 2
+
+
+def _is_retryable(response: str) -> bool:
+    """Whether a provider error string is worth another attempt."""
+    if not response.startswith("Error: "):
+        return False
+    lowered = response.lower()
+    return any(marker in lowered for marker in _RETRYABLE_MARKERS)
 
 
 def _strip_code_fence(text: str) -> str:
@@ -907,6 +949,13 @@ Please note that you must use English for generating video search terms; Chinese
                 # 错误文案原样返回，下游只做空值判断时会把非空字符串误认为成功，
                 # 素材下载循环还会按字符遍历错误文案，产生无意义的外部请求。
                 # 这里统一返回空列表，让任务编排层在真实故障位置立即结束任务。
+                # A transient failure is retried first: returning [] on the
+                # first blip ends the task at a stage that would have
+                # succeeded on the next attempt.
+                if _is_retryable(response) and i < _max_retries - 1:
+                    logger.warning(f"provider failed transiently: {response}")
+                    sleep(_RETRY_BACKOFF_SECONDS * (i + 1))
+                    continue
                 logger.error(f"failed to generate video terms: {response}")
                 return []
             search_terms = json.loads(_strip_code_fence(response))

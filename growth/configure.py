@@ -51,7 +51,42 @@ def clean_key(raw: str, field: str) -> str:
         raise ConfigError(f"{field}: the key is empty")
     if any(char.isspace() for char in value):
         raise ConfigError(f"{field}: the key contains whitespace; check the paste")
+    if _looks_like_a_placeholder(value):
+        raise ConfigError(
+            f"{field}: {value!r} looks like the example from an instruction, "
+            "not a key. Paste the real one."
+        )
     return value
+
+
+# Words that only ever appear in a placeholder. Accepting one writes a value
+# the provider rejects later with an unrelated-looking 401, several commands
+# away from the paste that caused it.
+_PLACEHOLDER_WORDS = (
+    "sua_chave",
+    "suachave",
+    "your_key",
+    "yourkey",
+    "your-api-key",
+    "api_key_here",
+    "chave_aqui",
+    "cole_",
+    "paste_",
+    "replace_",
+    "xxxx",
+    "...",
+    "example",
+    "placeholder",
+    "changeme",
+)
+
+
+def _looks_like_a_placeholder(value: str) -> bool:
+    """Whether this is example text rather than a credential."""
+    lowered = value.lower()
+    if lowered.startswith("<") and lowered.endswith(">"):
+        return True
+    return any(word in lowered for word in _PLACEHOLDER_WORDS)
 
 
 def set_app_values(text: str, updates: dict[str, str | list[str]]) -> str:

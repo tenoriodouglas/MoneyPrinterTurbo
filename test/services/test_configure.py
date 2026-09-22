@@ -9,6 +9,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
+from growth import configure
 from growth.configure import (
     ConfigError,
     apply_updates,
@@ -205,3 +206,31 @@ class TestMask(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TestPlaceholderKeys(unittest.TestCase):
+    """An example pasted instead of a key is accepted by TOML and rejected by
+    the provider several commands later, as an unrelated-looking 401."""
+
+    def test_the_portuguese_placeholder_is_refused(self):
+        with self.assertRaises(configure.ConfigError) as ctx:
+            configure.clean_key("sk_SUA_CHAVE", "image")
+        self.assertIn("looks like the example", str(ctx.exception))
+
+    def test_the_english_placeholder_is_refused(self):
+        with self.assertRaises(configure.ConfigError):
+            configure.clean_key("YOUR_KEY_HERE", "llm")
+
+    def test_angle_brackets_are_refused(self):
+        with self.assertRaises(configure.ConfigError):
+            configure.clean_key("<key>", "llm")
+
+    def test_a_real_key_is_accepted(self):
+        self.assertEqual(
+            configure.clean_key("sk_PV6GoBh65PXsFkrMa5c5riVC36", "llm"),
+            "sk_PV6GoBh65PXsFkrMa5c5riVC36",
+        )
+
+    def test_a_key_that_merely_contains_x_characters_is_accepted(self):
+        """The guard must not reject a real key for its letters."""
+        self.assertEqual(configure.clean_key("sk_axbxcxd", "llm"), "sk_axbxcxd")

@@ -101,10 +101,13 @@ def _cmd_doctor(args: argparse.Namespace) -> int:
     if failed:
         print(f"{len(failed)} check(s) failed; fix those before running a batch")
         return 1
+    # Suggest the pack that was just checked. Naming a different one sends the
+    # reader to render something the checks never covered.
+    pack = args.niche or "ai-tools"
     if warned:
         print(f"ready to render, with {len(warned)} warning(s)")
     else:
-        print("ready to render:  python -m growth run ai-tools --count 1")
+        print(f"ready to render:  python -m growth run {pack} --count 1")
     return 0
 
 

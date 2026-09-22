@@ -527,6 +527,186 @@ class TestProgressReporting(unittest.TestCase):
             self.assertIsNone(bot._job)
 
 
+class TestFailureIsExplained(unittest.TestCase):
+    """The engine records the stage and the reason on every failed task, and
+    the bot used to print neither. It told the operator to read a log that
+    does not exist: the only loguru sink is the terminal, and the bot runs the
+    engine quietly."""
+
+    def _failed(self, stage="preflight", error="missing openai_image_base_url"):
+        return {
+            "succeeded": 0,
+            "total": 1,
+            "records": [{"status": "failed", "failed_stage": stage, "error": error}],
+        }
+
+    def test_the_stage_is_named_in_the_chat(self):
+        client = FakeClient()
+        bot = _bot(client, runner=lambda n, c, **_: self._failed())
+        bot.handle(_message("/run ufo-sightings"))
+        self.assertTrue(_wait_idle(bot))
+        self.assertIn("conferência da configuração", client.texts_to(OWNER))
+
+    def test_the_engines_own_reason_is_repeated_verbatim(self):
+        client = FakeClient()
+        bot = _bot(client, runner=lambda n, c, **_: self._failed())
+        bot.handle(_message("/run ufo-sightings"))
+        self.assertTrue(_wait_idle(bot))
+        self.assertIn("missing openai_image_base_url", client.texts_to(OWNER))
+
+    def test_it_no_longer_points_at_a_log_that_does_not_exist(self):
+        client = FakeClient()
+        bot = _bot(client, runner=lambda n, c, **_: self._failed())
+        bot.handle(_message("/run ufo-sightings"))
+        self.assertTrue(_wait_idle(bot))
+        self.assertNotIn("log do servidor", client.texts_to(OWNER))
+
+    def test_an_unknown_stage_is_shown_rather_than_dropped(self):
+        client = FakeClient()
+        bot = _bot(client, runner=lambda n, c, **_: self._failed(stage="brand-new"))
+        bot.handle(_message("/run ufo-sightings"))
+        self.assertTrue(_wait_idle(bot))
+        self.assertIn("brand-new", client.texts_to(OWNER))
+
+    def test_a_long_reason_is_truncated_to_fit_telegram(self):
+        client = FakeClient()
+        bot = _bot(client, runner=lambda n, c, **_: self._failed(error="x" * 5000))
+        bot.handle(_message("/run ufo-sightings"))
+        self.assertTrue(_wait_idle(bot))
+        for _, text in client.messages:
+            self.assertLess(len(text), 4096)
+
+    def test_an_error_with_a_tag_in_it_is_escaped(self):
+        """Telegram drops the whole message on a stray tag, and this is the
+        message that must never be lost."""
+        client = FakeClient()
+        bot = _bot(client, runner=lambda n, c, **_: self._failed(error="got <Response [401]>"))
+        bot.handle(_message("/run ufo-sightings"))
+        self.assertTrue(_wait_idle(bot))
+        self.assertIn("&lt;Response", client.texts_to(OWNER))
+
+    def test_many_failures_are_capped(self):
+        client = FakeClient()
+        result = {
+            "succeeded": 0,
+            "total": 9,
+            "records": [
+                {"status": "failed", "failed_stage": "script", "error": f"reason {i}"}
+                for i in range(9)
+            ],
+        }
+        bot = _bot(client, runner=lambda n, c, **_: result)
+        bot.handle(_message("/run ufo-sightings"))
+        self.assertTrue(_wait_idle(bot))
+        text = client.texts_to(OWNER)
+        self.assertIn(f"mais {9 - bot_module.MAX_FAILURES_SHOWN}", text)
+
+
+class TestRunPreflight(unittest.TestCase):
+    """A pack that draws its own scenes needs config the engine only checks
+    after the batch starts — so the chat was promised twenty minutes and told
+    five seconds later that nothing came out."""
+
+    def test_a_pack_missing_its_image_config_is_refused_before_starting(self):
+        client = FakeClient()
+        started = []
+        bot = _bot(client, runner=lambda n, c, **_: started.append(n) or {})
+        with patch("app.services.material.is_openai_image_enabled", return_value=False):
+            bot.handle(_message("/run ufo-sightings"))
+        self.assertEqual(started, [])
+        self.assertIn("growth config --niche", client.texts_to(OWNER))
+
+    def test_the_refusal_names_the_command_that_fixes_it(self):
+        client = FakeClient()
+        bot = _bot(client)
+        with patch("app.services.material.is_openai_image_enabled", return_value=False):
+            bot.handle(_message("/run ufo-sightings"))
+        self.assertIn("ufo-sightings", client.texts_to(OWNER))
+
+    def test_a_configured_pack_starts_normally(self):
+        client = FakeClient()
+        started = []
+        bot = _bot(client, runner=lambda n, c, **_: started.append(n) or {})
+        with patch("app.services.material.is_openai_image_enabled", return_value=True):
+            bot.handle(_message("/run ufo-sightings"))
+            self.assertTrue(_wait_idle(bot))
+        self.assertEqual(started, ["ufo-sightings"])
+
+
+class TestDoctorCommand(unittest.TestCase):
+    """Every failure hit today was one of these checks, and each cost a trip
+    to a terminal the owner explicitly did not want to use."""
+
+    def _check(self, name, status, detail="fine", fix=""):
+        from growth.doctor import Check
+
+        return Check(name=name, status=status, detail=detail, fix=fix)
+
+    def _wait_for_second_message(self, client):
+        deadline = time.monotonic() + 5
+        while time.monotonic() < deadline:
+            if len(client.messages) >= 2:
+                return True
+            time.sleep(0.01)
+        return False
+
+    def test_it_reports_every_check(self):
+        from growth.doctor import OK
+
+        client = FakeClient()
+        bot = _bot(client)
+        checks = [self._check("python", OK), self._check("ffmpeg", OK)]
+        with patch.object(bot_module, "run_checks", return_value=checks):
+            bot.handle(_message("/doctor"))
+            self.assertTrue(self._wait_for_second_message(client))
+        text = client.texts_to(OWNER)
+        self.assertIn("python", text)
+        self.assertIn("ffmpeg", text)
+
+    def test_a_failure_carries_its_fix(self):
+        from growth.doctor import FAIL, OK
+
+        client = FakeClient()
+        bot = _bot(client)
+        checks = [
+            self._check("materials", FAIL, "flux returned no image", "check the api key"),
+            self._check("voice", OK),
+        ]
+        with patch.object(bot_module, "run_checks", return_value=checks):
+            bot.handle(_message("/doctor"))
+            self.assertTrue(self._wait_for_second_message(client))
+        text = client.texts_to(OWNER)
+        self.assertIn("check the api key", text)
+        self.assertIn("1 check(s) com falha", text)
+
+    def test_all_green_says_it_is_ready(self):
+        from growth.doctor import OK
+
+        client = FakeClient()
+        bot = _bot(client)
+        with patch.object(bot_module, "run_checks", return_value=[self._check("python", OK)]):
+            bot.handle(_message("/doctor"))
+            self.assertTrue(self._wait_for_second_message(client))
+        self.assertIn("pode mandar /run", client.texts_to(OWNER))
+
+    def test_an_unknown_niche_is_refused_without_running_checks(self):
+        client = FakeClient()
+        bot = _bot(client)
+        with patch.object(bot_module, "run_checks") as checks:
+            bot.handle(_message("/doctor not-a-pack"))
+        checks.assert_not_called()
+
+    def test_a_crash_in_the_checks_still_answers_the_chat(self):
+        """It runs on its own thread; an escape there leaves the chat waiting
+        for a reply that never comes."""
+        client = FakeClient()
+        bot = _bot(client)
+        with patch.object(bot_module, "run_checks", side_effect=RuntimeError("boom")):
+            bot.handle(_message("/doctor"))
+            self.assertTrue(self._wait_for_second_message(client))
+        self.assertIn("boom", client.texts_to(OWNER))
+
+
 class TestLastCommand(unittest.TestCase):
     def test_it_announces_the_send_and_then_sends(self):
         client = FakeClient()

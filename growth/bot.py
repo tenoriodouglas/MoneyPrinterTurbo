@@ -23,6 +23,9 @@ from typing import Any, Callable
 import requests
 from loguru import logger
 
+from growth.doctor import FAIL as CHECK_FAIL
+from growth.doctor import OK as CHECK_OK
+from growth.doctor import run_checks
 from growth.niche import NicheError, load_all_niches, load_niche
 from growth.plan import PlanError, create_plan, scene_count
 from growth.produce import ProduceError, produce
@@ -60,6 +63,25 @@ class BotError(RuntimeError):
 # Phases worth interrupting someone for. The four before these take about
 # two minutes together, so announcing each would be noise.
 NOTABLE_PHASES = frozenset({"materials", "combining", "rendering"})
+
+# The engine records one of these on a failed task. Naming the stage in the
+# chat is the difference between a fixable message and a shrug: there is no
+# log file to fall back on, since the only loguru sink is the terminal and the
+# bot runs the engine quietly.
+STAGE_NAMES: dict[str, str] = {
+    "preflight": "conferência da configuração",
+    "script": "escrita do roteiro",
+    "terms": "escolha das cenas",
+    "audio": "gravação da narração",
+    "materials": "geração das imagens",
+    "video": "montagem do vídeo",
+    "pipeline": "execução da tarefa",
+    "runtime": "execução da tarefa",
+    "unknown": "etapa não identificada",
+}
+# Room for the heading and a couple of records inside Telegram's 4096 limit.
+MAX_ERROR_CHARS = 700
+MAX_FAILURES_SHOWN = 3
 
 
 @dataclass
@@ -290,14 +312,67 @@ class GrowthBot:
         else:
             self._say(
                 job.chat_id,
-                f"😕 Terminei em {job.elapsed_minutes:.0f} min, mas nenhum dos "
-                f"{total} vídeo(s) saiu. Dá uma olhada no log do servidor.",
+                f"😕 Terminei em {job.elapsed_minutes:.0f} min e nenhum dos "
+                f"{total} vídeo(s) saiu.\n\n" + self._why_it_failed(result),
             )
         for record in result.get("records", []):
             if record.get("status") != "succeeded":
                 continue
             for file_path in record.get("files", []):
                 self._send_video(job.chat_id, Path(file_path), record.get("caption", ""))
+
+    def _missing_config(self, niche: Any) -> str:
+        """Why this pack cannot render yet, or an empty string if it can.
+
+        Local only, no network: this blocks the reply to /run, and the point
+        is to answer in a second rather than promise twenty minutes and fail
+        in five. The engine's own preflight is reused rather than restated,
+        so the two cannot drift apart.
+        """
+        if niche.video.video_source != "openai_image":
+            return ""
+        from app.services.material import is_openai_image_enabled
+
+        if is_openai_image_enabled():
+            return ""
+        return (
+            f"⚙️ O pack <code>{html.escape(niche.id)}</code> desenha as próprias "
+            "cenas, mas o endereço e o modelo de imagem não estão no config.\n\n"
+            "Rode uma vez no servidor:\n"
+            f"<code>python -m growth config --niche {html.escape(niche.id)} "
+            "--image-key SUA_CHAVE</code>\n\n"
+            "Depois <code>/doctor</code> aqui mesmo pra confirmar."
+        )
+
+    def _why_it_failed(self, result: dict[str, Any]) -> str:
+        """Report the stage and reason the engine recorded, not a shrug.
+
+        Both already travel in every record. Telling the operator to read a
+        log was worse than useless: the only loguru sink is the terminal, so
+        under the bot the engine's own output goes nowhere.
+        """
+        failed = [
+            record
+            for record in result.get("records", [])
+            if record.get("status") != "succeeded"
+        ]
+        if not failed:
+            return "Não consegui recuperar o motivo. Rode <code>python -m growth doctor</code>."
+
+        lines: list[str] = []
+        for record in failed[:MAX_FAILURES_SHOWN]:
+            stage = str(record.get("failed_stage") or "unknown")
+            reason = str(record.get("error") or "").strip() or "sem detalhe"
+            if len(reason) > MAX_ERROR_CHARS:
+                reason = reason[:MAX_ERROR_CHARS] + "…"
+            lines.append(
+                f"🧩 Parou em: <b>{html.escape(STAGE_NAMES.get(stage, stage))}</b>\n"
+                f"<code>{html.escape(reason)}</code>"
+            )
+        if len(failed) > MAX_FAILURES_SHOWN:
+            lines.append(f"…e mais {len(failed) - MAX_FAILURES_SHOWN} com falha.")
+        lines.append("Depois de ajustar, <code>/doctor</code> confere sem gastar render.")
+        return "\n\n".join(lines)
 
     def _send_video(self, chat_id: int, path: Path, caption: str) -> None:
         if not path.is_file():
@@ -326,6 +401,7 @@ class GrowthBot:
             "👋 <b>Oi! Eu faço os vídeos pra você.</b>\n\n"
             "🎬 /run &lt;nicho&gt; [quantos] — começar um lote\n"
             "📊 /status — o que estou fazendo agora\n"
+            "🩺 /doctor [nicho] — conferir se está tudo configurado\n"
             "🗂 /niches — os packs e quanto rendem\n"
             "🔍 /review — conferir os vídeos antes de postar\n"
             "📤 /last [n] — reenviar os vídeos mais recentes\n\n"
@@ -363,6 +439,13 @@ class GrowthBot:
                 count = max(1, min(int(args[1]), 5))
             except ValueError:
                 return "🔢 A quantidade precisa ser um número, tipo <code>/run ufo-sightings 2</code>"
+
+        # Refuse before promising twenty minutes. The engine checks the same
+        # thing, but only after the batch has started and the chat has been
+        # told to wait.
+        blocked = self._missing_config(niche)
+        if blocked:
+            return blocked
 
         with self._lock:
             if self._job is not None:
@@ -450,12 +533,60 @@ class GrowthBot:
             self._send_video(chat_id, item.path, item.subject)
         return ""
 
+    def _cmd_doctor(self, chat_id: int, args: list[str]) -> str:
+        """Run the preflight checks from the chat.
+
+        Every failure the operator hit today was one of these, and each cost a
+        trip to a terminal to find. The network checks take a few seconds, so
+        this answers first and reports when it is done.
+        """
+        niche_id = args[0] if args else None
+        if niche_id:
+            try:
+                load_niche(niche_id)
+            except NicheError as exc:
+                return f"❌ {html.escape(str(exc))}"
+
+        self._say(chat_id, "🩺 Conferindo tudo, uns 10 segundos…")
+        # On its own thread: the checks call out to the network, and blocking
+        # the poll loop would stop the bot answering anything meanwhile.
+        threading.Thread(
+            target=self._run_doctor, args=(chat_id, niche_id), daemon=True
+        ).start()
+        return ""
+
+    def _run_doctor(self, chat_id: int, niche_id: str | None) -> None:
+        try:
+            checks = run_checks(niche_id=niche_id)
+        except Exception as exc:  # never leave the chat waiting on a thread
+            logger.exception("doctor failed")
+            self._say(chat_id, f"💥 Não consegui conferir:\n<code>{html.escape(str(exc))}</code>")
+            return
+
+        marks = {CHECK_OK: "✅", CHECK_FAIL: "❌"}
+        lines = []
+        for check in checks:
+            lines.append(
+                f"{marks.get(check.status, '⚠️')} <b>{html.escape(check.name)}</b> — "
+                f"{html.escape(check.detail[:120])}"
+            )
+            if check.status != CHECK_OK and check.fix:
+                lines.append(f"   ↳ {html.escape(check.fix)}")
+        broken = [c for c in checks if c.status == CHECK_FAIL]
+        lines.append(
+            "🎬 Tudo pronto, pode mandar /run"
+            if not broken
+            else f"\n⚠️ {len(broken)} check(s) com falha — corrija antes de gastar um render."
+        )
+        self._say(chat_id, "\n".join(lines))
+
     COMMANDS: dict[str, str] = {
         "/start": "_cmd_start",
         "/help": "_cmd_start",
         "/niches": "_cmd_niches",
         "/run": "_cmd_run",
         "/status": "_cmd_status",
+        "/doctor": "_cmd_doctor",
         "/review": "_cmd_review",
         "/last": "_cmd_last",
     }
