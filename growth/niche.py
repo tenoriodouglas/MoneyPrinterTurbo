@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import difflib
 import json
+import re
 import tomllib
 from collections.abc import Iterable
 from dataclasses import dataclass, field
@@ -17,6 +18,13 @@ from pathlib import Path
 from typing import Any
 
 from loguru import logger
+
+# The engine's background-music formats, from the one module that defines them,
+# so a pack and a render never disagree about what counts as audio. Unlike
+# app.services.voice this import is cheap and self-contained: app.services.bgm
+# pulls in stdlib plus app.utils only, never moviepy, openai or config.toml, so
+# `growth niches` still runs with no engine config.
+from app.services.bgm import SUPPORTED_BGM_EXTENSIONS
 
 NICHES_DIR = Path(__file__).resolve().parent.parent / "niches"
 
@@ -58,6 +66,21 @@ _VALID_PLATFORMS = {"tiktok", "youtube_shorts", "youtube_long", "instagram_reels
 MAX_SCRIPT_PROMPT = 2000
 # VideoParams.custom_system_prompt ceiling.
 MAX_SYSTEM_PROMPT = 8000
+# VideoParams.video_music_prompt ceiling. A pack over it builds a manifest the
+# engine rejects at submission, long after the pack itself looked fine.
+MAX_MUSIC_PROMPT = 2000
+
+# The built-in songs. A pack's [music].mood names a subfolder here, which is
+# what stops a ghost-story video and a finance video sharing one generic loop.
+MUSIC_DIR = Path(__file__).resolve().parent.parent / "resource" / "songs"
+# The AI music services the engine can actually call (app/services/task.py
+# _VIDEO_MUSIC_PROVIDERS). Any other name reaches the render as an unknown
+# bgm_type and quietly degrades to a random built-in track.
+_VALID_MUSIC_PROVIDERS = {"sonilo", "elevenlabs"}
+# A mood becomes a path segment under MUSIC_DIR, so it must be one plain folder
+# name. The character class alone rejects separators; traversal and dotfiles
+# are checked separately because "." and "-" are legitimate inside a name.
+_SAFE_MOOD = re.compile(r"[A-Za-z0-9._-]+")
 
 
 class NicheError(ValueError):
@@ -137,6 +160,26 @@ class ImageStyle:
 
 
 @dataclass(frozen=True, slots=True)
+class MusicStyle:
+    """Background music picked for this vertical rather than for all of them.
+
+    Either a ``mood`` -- a subfolder of resource/songs holding tracks that suit
+    the pack -- or a ``prompt`` handed to one of the engine's AI music
+    providers. Declaring both is useful: the mood is what a render falls back
+    to when the provider is not configured.
+    """
+
+    mood: str = ""
+    prompt: str = ""
+    provider: str = ""
+
+    @property
+    def uses_ai(self) -> bool:
+        """True when the pack asks a provider to generate its music."""
+        return bool(self.provider and self.prompt)
+
+
+@dataclass(frozen=True, slots=True)
 class Niche:
     """One content vertical, fully specified."""
 
@@ -157,6 +200,7 @@ class Niche:
     monetization: dict[str, Any] = field(default_factory=dict)
     video: VideoDefaults = field(default_factory=VideoDefaults)
     images: ImageStyle = field(default_factory=ImageStyle)
+    music: MusicStyle = field(default_factory=MusicStyle)
 
     @property
     def score(self) -> float:
@@ -230,6 +274,33 @@ def _voice_suggestion(name: str) -> str:
     return f" (did you mean {', '.join(close)}?)" if close else ""
 
 
+def _is_safe_mood(mood: str) -> bool:
+    """Whether a mood is a single folder name that is safe to join to a path."""
+    return bool(
+        _SAFE_MOOD.fullmatch(mood) and ".." not in mood and not mood.startswith(".")
+    )
+
+
+def mood_tracks(mood: str) -> list[str]:
+    """Track filenames inside resource/songs/<mood>/, sorted.
+
+    Empty when the mood is empty, the folder is missing, or it holds no
+    supported audio. The mood is re-checked here rather than trusted: this is a
+    public helper and it is what turns the name into a filesystem path.
+    """
+    if not _is_safe_mood(mood):
+        return []
+    try:
+        entries = list((MUSIC_DIR / mood).iterdir())
+    except OSError:
+        return []
+    return sorted(
+        entry.name
+        for entry in entries
+        if entry.is_file() and entry.suffix.lower() in SUPPORTED_BGM_EXTENSIONS
+    )
+
+
 def _build_video_defaults(raw: dict[str, Any]) -> VideoDefaults:
     defaults = VideoDefaults()
     aspect = raw.get("aspect", defaults.aspect)
@@ -290,6 +361,42 @@ def _build_image_style(raw: dict[str, Any]) -> ImageStyle:
     return style
 
 
+def _build_music_style(raw: dict[str, Any], source: str) -> MusicStyle:
+    music = MusicStyle(
+        mood=str(raw.get("mood", "")).strip(),
+        prompt=str(raw.get("prompt", "")).strip(),
+        # Normalised because the engine looks the provider up by exact name.
+        provider=str(raw.get("provider", "")).strip().lower(),
+    )
+    if music.mood and not _is_safe_mood(music.mood):
+        raise NicheError(
+            f"[music].mood must be one folder name under {MUSIC_DIR}, using only "
+            f"letters, digits, '.', '_' and '-'; got {music.mood!r}"
+        )
+    if music.provider and music.provider not in _VALID_MUSIC_PROVIDERS:
+        raise NicheError(
+            f"[music].provider must be one of {sorted(_VALID_MUSIC_PROVIDERS)}; "
+            f"got {music.provider!r}"
+        )
+    # A provider with nothing to generate from does not fail the render: it
+    # falls through to a random built-in track, so the pack looks fine and the
+    # videos sound generic. That is worth refusing to load over.
+    if music.provider and not music.prompt:
+        raise NicheError(f"[music].provider {music.provider!r} needs a prompt")
+    if len(music.prompt) > MAX_MUSIC_PROMPT:
+        raise NicheError(f"[music].prompt exceeds {MAX_MUSIC_PROMPT} characters")
+    # An unfilled mood folder is a job to do, not a broken pack: the owner adds
+    # the tracks later, and one empty folder must not drop the pack out of
+    # every listing. Same degrade as an unreadable voice catalogue above.
+    if music.mood and not mood_tracks(music.mood):
+        logger.warning(
+            f"{source}: [music].mood is {music.mood!r} but {MUSIC_DIR / music.mood} "
+            "is missing or holds no supported audio; renders fall back to the "
+            "built-in songs until tracks are added"
+        )
+    return music
+
+
 def parse_niche(data: dict[str, Any], source: str = "<memory>") -> Niche:
     """Turn raw TOML into a validated Niche, or raise NicheError."""
     try:
@@ -341,6 +448,7 @@ def parse_niche(data: dict[str, Any], source: str = "<memory>") -> Niche:
             monetization=dict(data.get("monetization", {})),
             video=_build_video_defaults(data.get("video", {})),
             images=_build_image_style(data.get("images", {})),
+            music=_build_music_style(data.get("music", {}), source),
         )
     except NicheError as exc:
         raise NicheError(f"{source}: {exc}") from exc
