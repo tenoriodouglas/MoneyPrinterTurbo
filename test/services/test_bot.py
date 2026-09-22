@@ -317,6 +317,63 @@ class TestTelegramClient(unittest.TestCase):
             bot_module.TelegramClient("   ")
 
 
+class TestWebhookConflict(unittest.TestCase):
+    """Telegram refuses getUpdates while a webhook is registered, and a token
+    that was ever pointed at one keeps it until it is deleted."""
+
+    def test_a_registered_webhook_is_reported_and_removed_at_startup(self):
+        client = unittest.mock.MagicMock()
+        client.get_me.return_value = {"username": "bot"}
+        client.get_webhook_info.return_value = {"url": "https://example.test/hook"}
+        with patch.object(bot_module, "TelegramClient", return_value=client):
+            with patch.object(bot_module, "poll_forever"):
+                bot_module.run({"telegram_bot_token": "t", "telegram_allowed_users": [1]})
+        client.delete_webhook.assert_called_once()
+
+    def test_no_webhook_means_nothing_is_deleted(self):
+        client = unittest.mock.MagicMock()
+        client.get_me.return_value = {"username": "bot"}
+        client.get_webhook_info.return_value = {}
+        with patch.object(bot_module, "TelegramClient", return_value=client):
+            with patch.object(bot_module, "poll_forever"):
+                bot_module.run({"telegram_bot_token": "t", "telegram_allowed_users": [1]})
+        client.delete_webhook.assert_not_called()
+
+    def test_repeated_rejections_stop_instead_of_looping_forever(self):
+        """Retrying cannot clear a webhook or a second poller, so a loop that
+        only logs would hide the problem behind identical lines."""
+        client = FakeClient()
+        calls = {"n": 0}
+
+        def rejected(offset):
+            calls["n"] += 1
+            raise BotError("getUpdates: Conflict: can't use getUpdates method while webhook is active")
+
+        client.get_updates = rejected
+        with patch.object(bot_module, "RETRY_DELAY", 0):
+            poll_forever(_bot(client), client, stop=threading.Event())
+        self.assertEqual(calls["n"], bot_module.MAX_REJECTIONS)
+
+    def test_a_successful_poll_forgets_earlier_rejections(self):
+        """A webhook cleared mid-flight should not count against a later one."""
+        client = FakeClient()
+        stop = threading.Event()
+        calls = {"n": 0}
+
+        def flaky(offset):
+            calls["n"] += 1
+            if calls["n"] < bot_module.MAX_REJECTIONS:
+                raise BotError("Conflict: webhook is active")
+            if calls["n"] > bot_module.MAX_REJECTIONS + 2:
+                stop.set()
+            return []
+
+        client.get_updates = flaky
+        with patch.object(bot_module, "RETRY_DELAY", 0):
+            poll_forever(_bot(client), client, stop=stop)
+        self.assertGreater(calls["n"], bot_module.MAX_REJECTIONS)
+
+
 class TestSettings(unittest.TestCase):
     def test_a_missing_token_names_botfather(self):
         with self.assertRaises(BotError) as context:

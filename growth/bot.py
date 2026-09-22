@@ -38,6 +38,9 @@ POLL_TIMEOUT = 30
 UPLOAD_TIMEOUT = 600
 # Back-off after a network failure, so a flapping connection does not spin.
 RETRY_DELAY = 5
+# Rejections in a row before giving up. A couple of retries cover a webhook
+# being removed as the bot starts; beyond that the cause is not transient.
+MAX_REJECTIONS = 3
 
 
 class BotError(RuntimeError):
@@ -86,6 +89,14 @@ class TelegramClient:
 
     def get_me(self) -> dict[str, Any]:
         return self._call("getMe")
+
+    def get_webhook_info(self) -> dict[str, Any]:
+        result = self._call("getWebhookInfo")
+        return result if isinstance(result, dict) else {}
+
+    def delete_webhook(self) -> None:
+        """Telegram refuses getUpdates while a webhook is registered."""
+        self._call("deleteWebhook")
 
     def get_updates(self, offset: int | None) -> list[dict[str, Any]]:
         payload: dict[str, Any] = {"timeout": POLL_TIMEOUT}
@@ -345,6 +356,7 @@ def poll_forever(bot: GrowthBot, client: TelegramClient, stop: threading.Event |
     """Read updates until stopped, surviving transient network failures."""
     stop = stop or threading.Event()
     offset: int | None = None
+    rejections = 0
     while not stop.is_set():
         try:
             updates = client.get_updates(offset)
@@ -353,12 +365,28 @@ def poll_forever(bot: GrowthBot, client: TelegramClient, stop: threading.Event |
             stop.wait(RETRY_DELAY)
             continue
         except BotError as exc:
-            # A conflicting poller or a webhook still set is a configuration
-            # problem that retrying cannot solve.
+            # A rejection is a configuration problem, not a hiccup: a webhook
+            # still registered, or a second poller on the same token. Retrying
+            # cannot fix either, so say what to do and stop rather than log the
+            # same line every few seconds forever.
+            rejections += 1
             logger.error(f"telegram rejected the poll: {exc}")
+            if rejections >= MAX_REJECTIONS:
+                if "webhook" in str(exc).lower():
+                    logger.error(
+                        "a webhook is registered for this token. Restart the bot: "
+                        "it removes one at startup."
+                    )
+                else:
+                    logger.error(
+                        "another process is polling the same token; stop it first. "
+                        "Telegram allows only one."
+                    )
+                return
             stop.wait(RETRY_DELAY)
             continue
 
+        rejections = 0
         for update in updates:
             offset = int(update.get("update_id", 0)) + 1
             message = update.get("message") or update.get("edited_message")
@@ -407,6 +435,14 @@ def run(app_config: dict[str, Any] | None = None) -> int:
     client = TelegramClient(token)
     identity = client.get_me()
     name = identity.get("username", "unknown")
+
+    # Telegram refuses getUpdates while a webhook is registered, and a token
+    # that was ever pointed at one keeps it until it is deleted. Report the url
+    # before removing it, so nothing disappears silently.
+    webhook = client.get_webhook_info().get("url", "")
+    if webhook:
+        logger.warning(f"removing the webhook registered at {webhook}; polling needs it gone")
+        client.delete_webhook()
 
     if not allowed:
         logger.warning(
