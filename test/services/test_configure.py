@@ -234,3 +234,53 @@ class TestPlaceholderKeys(unittest.TestCase):
     def test_a_key_that_merely_contains_x_characters_is_accepted(self):
         """The guard must not reject a real key for its letters."""
         self.assertEqual(configure.clean_key("sk_axbxcxd", "llm"), "sk_axbxcxd")
+
+
+class TestFreshConfigRead(unittest.TestCase):
+    """app/config loads config.toml once at import, so a long-lived process
+    never sees an edit. The bot is exactly that, and an operator who fixes
+    config.toml would otherwise be refused by the same stale value forever."""
+
+    def _write(self, directory, body):
+        path = Path(directory) / "config.toml"
+        path.write_text(body, encoding="utf-8")
+        return path
+
+    def test_it_returns_the_app_table(self):
+        with tempfile.TemporaryDirectory() as temp:
+            path = self._write(temp, '[app]\nllm_provider = "pollinations"\n')
+            self.assertEqual(
+                configure.load_app_config(path)["llm_provider"], "pollinations"
+            )
+
+    def test_it_sees_an_edit_the_process_never_loaded(self):
+        with tempfile.TemporaryDirectory() as temp:
+            path = self._write(temp, '[app]\nllm_provider = "gemini"\n')
+            self.assertEqual(configure.load_app_config(path)["llm_provider"], "gemini")
+            self._write(temp, '[app]\nllm_provider = "pollinations"\n')
+            self.assertEqual(
+                configure.load_app_config(path)["llm_provider"], "pollinations"
+            )
+
+    def test_a_byte_order_mark_does_not_defeat_it(self):
+        """The engine opens with utf-8-sig and renders happily; bare tomllib
+        rejects the same file."""
+        with tempfile.TemporaryDirectory() as temp:
+            path = Path(temp) / "config.toml"
+            path.write_bytes(b"\xef\xbb\xbf[app]\nllm_provider = \"openai\"\n")
+            self.assertEqual(configure.load_app_config(path)["llm_provider"], "openai")
+
+    def test_a_missing_file_falls_back_rather_than_failing(self):
+        """None means "use the in-process snapshot". Refusing a render over a
+        stray byte would be worse than the staleness this fixes."""
+        self.assertIsNone(configure.load_app_config(Path("/nonexistent/config.toml")))
+
+    def test_broken_toml_falls_back_rather_than_failing(self):
+        with tempfile.TemporaryDirectory() as temp:
+            path = self._write(temp, "[app\nbroken = ")
+            self.assertIsNone(configure.load_app_config(path))
+
+    def test_a_file_with_no_app_table_is_not_an_error(self):
+        with tempfile.TemporaryDirectory() as temp:
+            path = self._write(temp, '[whisper]\nmodel = "base"\n')
+            self.assertEqual(configure.load_app_config(path), {})

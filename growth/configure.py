@@ -14,8 +14,10 @@ from __future__ import annotations
 
 import re
 import shutil
+import tomllib
 from datetime import datetime
 from pathlib import Path
+from typing import Any
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 CONFIG_PATH = REPO_ROOT / "config.toml"
@@ -37,6 +39,30 @@ def _toml_value(value: str | list[str]) -> str:
     if isinstance(value, list):
         return "[" + ", ".join(_toml_string(item) for item in value) + "]"
     return _toml_string(value)
+
+
+def load_app_config(config_path: Path | None = None) -> dict[str, Any] | None:
+    """Read the [app] table from disk, ignoring the process's own snapshot.
+
+    app/config builds its config dict once at import and never re-reads it, so
+    a long-lived process keeps whatever config.toml said when it started. The
+    bot is exactly that: an operator who fixes config.toml would be refused by
+    the same stale check forever, and the only way out would be a restart —
+    a trip to the terminal, which is what the bot exists to avoid.
+
+    None on any failure, because every consumer already reads that as "use the
+    in-process snapshot". Refusing a render over a stray byte would be worse
+    than the staleness this fixes.
+    """
+    path = config_path or CONFIG_PATH
+    try:
+        # utf-8-sig and the lstrip mirror app/config/config.py: a BOM the
+        # engine renders from happily is a parse error to bare tomllib.
+        text = path.read_text(encoding="utf-8-sig").lstrip("﻿")
+        table = tomllib.loads(text).get("app", {})
+    except (OSError, tomllib.TOMLDecodeError, AttributeError):
+        return None
+    return table if isinstance(table, dict) else None
 
 
 def clean_key(raw: str, field: str) -> str:
@@ -146,8 +172,6 @@ def apply_updates(
     updates: dict[str, str | list[str]], config_path: Path | None = None
 ) -> Path:
     """Back up config.toml, rewrite the given keys, and verify it still parses."""
-    import tomllib
-
     path = config_path or CONFIG_PATH
     if not path.is_file():
         raise ConfigError(

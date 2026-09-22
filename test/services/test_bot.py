@@ -1,3 +1,4 @@
+import json
 import sys
 import tempfile
 import threading
@@ -634,13 +635,13 @@ class TestRunPreflight(unittest.TestCase):
 
 
 class TestDoctorCommand(unittest.TestCase):
-    """Every failure hit today was one of these checks, and each cost a trip
-    to a terminal the owner explicitly did not want to use."""
+    """Every failure hit on setup day was one of these checks, and each cost a
+    trip to a terminal the owner explicitly did not want to use."""
 
-    def _check(self, name, status, detail="fine", fix=""):
-        from growth.doctor import Check
-
-        return Check(name=name, status=status, detail=detail, fix=fix)
+    def _completed(self, rows, returncode=0):
+        return unittest.mock.Mock(
+            returncode=returncode, stdout=json.dumps(rows) + "\n", stderr=""
+        )
 
     def _wait_for_second_message(self, client):
         deadline = time.monotonic() + 5
@@ -650,61 +651,140 @@ class TestDoctorCommand(unittest.TestCase):
             time.sleep(0.01)
         return False
 
-    def test_it_reports_every_check(self):
-        from growth.doctor import OK
-
-        client = FakeClient()
-        bot = _bot(client)
-        checks = [self._check("python", OK), self._check("ffmpeg", OK)]
-        with patch.object(bot_module, "run_checks", return_value=checks):
-            bot.handle(_message("/doctor"))
+    def _ask(self, client, bot, rows, text="/doctor"):
+        with patch.object(bot_module.subprocess, "run", return_value=self._completed(rows)) as run:
+            bot.handle(_message(text))
             self.assertTrue(self._wait_for_second_message(client))
+        return run
+
+    def test_it_reports_every_check(self):
+        client = FakeClient()
+        rows = [
+            {"name": "python", "status": "ok", "detail": "3.11", "fix": ""},
+            {"name": "ffmpeg", "status": "ok", "detail": "8.1.2", "fix": ""},
+        ]
+        self._ask(client, _bot(client), rows)
         text = client.texts_to(OWNER)
         self.assertIn("python", text)
         self.assertIn("ffmpeg", text)
 
     def test_a_failure_carries_its_fix(self):
-        from growth.doctor import FAIL, OK
-
         client = FakeClient()
-        bot = _bot(client)
-        checks = [
-            self._check("materials", FAIL, "flux returned no image", "check the api key"),
-            self._check("voice", OK),
+        rows = [
+            {
+                "name": "materials",
+                "status": "fail",
+                "detail": "flux returned no image",
+                "fix": "check the api key",
+            }
         ]
-        with patch.object(bot_module, "run_checks", return_value=checks):
-            bot.handle(_message("/doctor"))
-            self.assertTrue(self._wait_for_second_message(client))
+        self._ask(client, _bot(client), rows)
         text = client.texts_to(OWNER)
         self.assertIn("check the api key", text)
         self.assertIn("1 check(s) com falha", text)
 
     def test_all_green_says_it_is_ready(self):
-        from growth.doctor import OK
-
         client = FakeClient()
-        bot = _bot(client)
-        with patch.object(bot_module, "run_checks", return_value=[self._check("python", OK)]):
-            bot.handle(_message("/doctor"))
-            self.assertTrue(self._wait_for_second_message(client))
+        rows = [{"name": "python", "status": "ok", "detail": "3.11", "fix": ""}]
+        self._ask(client, _bot(client), rows)
         self.assertIn("pode mandar /run", client.texts_to(OWNER))
 
-    def test_an_unknown_niche_is_refused_without_running_checks(self):
+    def test_the_checks_run_in_a_fresh_process(self):
+        """app/config reads config.toml once at import, so an in-process check
+        would report a config the operator has already fixed as still broken,
+        with a restart the only way out."""
+        client = FakeClient()
+        rows = [{"name": "python", "status": "ok", "detail": "3.11", "fix": ""}]
+        run = self._ask(client, _bot(client), rows)
+        command = run.call_args.args[0]
+        self.assertIn("doctor", command)
+        self.assertIn("--json", command)
+
+    def test_a_niche_is_passed_through(self):
+        client = FakeClient()
+        rows = [{"name": "python", "status": "ok", "detail": "3.11", "fix": ""}]
+        run = self._ask(client, _bot(client), rows, text="/doctor ufo-sightings")
+        command = run.call_args.args[0]
+        self.assertIn("--niche", command)
+        self.assertIn("ufo-sightings", command)
+
+    def test_an_unknown_niche_is_refused_without_running_anything(self):
         client = FakeClient()
         bot = _bot(client)
-        with patch.object(bot_module, "run_checks") as checks:
+        with patch.object(bot_module.subprocess, "run") as run:
             bot.handle(_message("/doctor not-a-pack"))
-        checks.assert_not_called()
+        run.assert_not_called()
 
-    def test_a_crash_in_the_checks_still_answers_the_chat(self):
+    def test_a_hung_check_gives_up_rather_than_waiting_forever(self):
+        client = FakeClient()
+        bot = _bot(client)
+        with patch.object(
+            bot_module.subprocess,
+            "run",
+            side_effect=bot_module.subprocess.TimeoutExpired(cmd="doctor", timeout=1),
+        ):
+            bot.handle(_message("/doctor"))
+            self.assertTrue(self._wait_for_second_message(client))
+        self.assertIn("demoraram demais", client.texts_to(OWNER))
+
+    def test_unreadable_output_still_answers_the_chat(self):
         """It runs on its own thread; an escape there leaves the chat waiting
         for a reply that never comes."""
         client = FakeClient()
         bot = _bot(client)
-        with patch.object(bot_module, "run_checks", side_effect=RuntimeError("boom")):
+        broken = unittest.mock.Mock(returncode=1, stdout="not json", stderr="")
+        with patch.object(bot_module.subprocess, "run", return_value=broken):
             bot.handle(_message("/doctor"))
             self.assertTrue(self._wait_for_second_message(client))
-        self.assertIn("boom", client.texts_to(OWNER))
+        self.assertIn("Não consegui conferir", client.texts_to(OWNER))
+
+
+class TestConfigIsReadFresh(unittest.TestCase):
+    """app/config builds its dict once at import and never re-reads it. In a
+    bot that runs for days, every in-process check would answer from whatever
+    config.toml said at startup."""
+
+    def test_the_preflight_reads_the_file_not_the_snapshot(self):
+        client = FakeClient()
+        bot = _bot(client)
+        with patch.object(bot_module, "load_app_config", return_value={"x": 1}) as fresh:
+            with patch("app.services.material.is_openai_image_enabled", return_value=True) as check:
+                bot.handle(_message("/run ufo-sightings"))
+                self.assertTrue(_wait_idle(bot))
+        fresh.assert_called()
+        self.assertEqual(check.call_args.args[0], {"x": 1})
+
+    def test_the_refusal_does_not_ask_for_a_restart(self):
+        """Telling the operator to restart sends them to the terminal, which
+        is the one thing the bot exists to avoid."""
+        client = FakeClient()
+        bot = _bot(client)
+        with patch("app.services.material.is_openai_image_enabled", return_value=False):
+            bot.handle(_message("/run ufo-sightings"))
+        self.assertIn("Não precisa reiniciar", client.texts_to(OWNER))
+
+    def test_the_refusal_does_not_name_a_rejected_placeholder(self):
+        """clean_key refuses SUA_CHAVE, so a command containing it cannot work
+        — the bot must not hand out an instruction its own config command
+        rejects."""
+        client = FakeClient()
+        bot = _bot(client)
+        with patch("app.services.material.is_openai_image_enabled", return_value=False):
+            bot.handle(_message("/run ufo-sightings"))
+        self.assertNotIn("SUA_CHAVE", client.texts_to(OWNER))
+
+    def test_planning_uses_the_file_too(self):
+        """The render is a fresh subprocess and reads config itself, but the
+        planning call runs here — it kept calling the provider configured when
+        the bot started."""
+        client = FakeClient()
+        bot = GrowthBot(client, {OWNER})  # the real _render, not a stub
+        with patch.object(bot_module, "load_app_config", return_value={"y": 2}):
+            with patch.object(bot_module, "create_plan", side_effect=RuntimeError("stop")) as plan:
+                with patch("app.services.material.is_openai_image_enabled", return_value=True):
+                    bot.handle(_message("/run ufo-sightings"))
+                    self.assertTrue(_wait_idle(bot))
+        self.assertEqual(plan.call_args.kwargs["app_config"], {"y": 2})
 
 
 class TestLastCommand(unittest.TestCase):

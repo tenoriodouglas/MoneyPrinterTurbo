@@ -14,6 +14,9 @@ port is the fiddliest part of the setup.
 from __future__ import annotations
 
 import html
+import json
+import subprocess
+import sys
 import threading
 import time
 from dataclasses import dataclass, field
@@ -23,12 +26,12 @@ from typing import Any, Callable
 import requests
 from loguru import logger
 
+from growth.configure import load_app_config
 from growth.doctor import FAIL as CHECK_FAIL
 from growth.doctor import OK as CHECK_OK
-from growth.doctor import run_checks
 from growth.niche import NicheError, load_all_niches, load_niche
 from growth.plan import PlanError, create_plan, scene_count
-from growth.produce import ProduceError, produce
+from growth.produce import REPO_ROOT, ProduceError, produce
 from growth.progress import ProgressTracker
 from growth.review import FAIL, review_all
 
@@ -54,6 +57,8 @@ HEARTBEAT_TICK = 15
 # would be twenty in seven minutes; the phase change alone would report 0/20
 # and then say nothing until the next phase.
 SCENES_PER_REPORT = 5
+# The checks call three providers; a slow one must not hang the thread.
+DOCTOR_TIMEOUT = 120
 
 
 class BotError(RuntimeError):
@@ -82,6 +87,16 @@ STAGE_NAMES: dict[str, str] = {
 # Room for the heading and a couple of records inside Telegram's 4096 limit.
 MAX_ERROR_CHARS = 700
 MAX_FAILURES_SHOWN = 3
+
+
+@dataclass(frozen=True)
+class _Check:
+    """One row of the doctor's json output."""
+
+    name: str
+    status: str
+    detail: str
+    fix: str = ""
 
 
 @dataclass
@@ -216,7 +231,10 @@ class GrowthBot:
     def _render(
         self, niche_id: str, count: int, on_line: Callable[[str], None] | None = None
     ) -> dict[str, Any]:
-        plan = create_plan(niche_id, count=count)
+        # Planning runs in this process, unlike the render, which is a fresh
+        # subprocess. Without this the bot would keep calling the provider
+        # configured when it started, however many times the file changed.
+        plan = create_plan(niche_id, count=count, app_config=load_app_config())
         return produce(
             Path(plan["plan_file"]).parent, quiet=True, on_line=on_line
         )
@@ -333,15 +351,23 @@ class GrowthBot:
             return ""
         from app.services.material import is_openai_image_enabled
 
-        if is_openai_image_enabled():
+        # From disk, not from the process: app/config reads config.toml once at
+        # import, so a bot running since before the fix would refuse forever
+        # and the only escape would be a restart.
+        if is_openai_image_enabled(load_app_config()):
             return ""
+        pack = html.escape(niche.id)
         return (
-            f"⚙️ O pack <code>{html.escape(niche.id)}</code> desenha as próprias "
-            "cenas, mas o endereço e o modelo de imagem não estão no config.\n\n"
+            f"⚙️ O pack <code>{pack}</code> desenha as próprias cenas, mas o "
+            "endereço e o modelo de imagem ainda não estão no config.\n\n"
             "Rode uma vez no servidor:\n"
-            f"<code>python -m growth config --niche {html.escape(niche.id)} "
-            "--image-key SUA_CHAVE</code>\n\n"
-            "Depois <code>/doctor</code> aqui mesmo pra confirmar."
+            f"<code>python -m growth config --niche {pack}</code>\n\n"
+            "🔑 Se o provedor de texto também não estiver configurado, resolve "
+            "os dois de uma vez:\n"
+            f"<code>python -m growth config --llm pollinations --llm-key "
+            f"&lt;sua-chave&gt; --niche {pack}</code>\n\n"
+            "Depois manda <code>/doctor</code> aqui mesmo pra conferir.\n"
+            "✅ Não precisa reiniciar o bot."
         )
 
     def _why_it_failed(self, result: dict[str, Any]) -> str:
@@ -556,8 +582,32 @@ class GrowthBot:
         return ""
 
     def _run_doctor(self, chat_id: int, niche_id: str | None) -> None:
+        """Run the checks in a fresh process, and report what it found.
+
+        A subprocess rather than a direct call, because the checks reach the
+        engine's config, which app/config reads from disk once at import. In
+        this long-lived process those values are whatever config.toml said at
+        startup, so an in-process check would call a config the operator has
+        already fixed broken. It also makes the answer identical to running
+        the command by hand.
+        """
+        command = [sys.executable, "-m", "growth", "doctor", "--json"]
+        if niche_id:
+            command += ["--niche", niche_id]
         try:
-            checks = run_checks(niche_id=niche_id)
+            completed = subprocess.run(
+                command,
+                cwd=REPO_ROOT,
+                capture_output=True,
+                text=True,
+                timeout=DOCTOR_TIMEOUT,
+            )
+            checks = [
+                _Check(**row) for row in json.loads(completed.stdout.strip().splitlines()[-1])
+            ]
+        except subprocess.TimeoutExpired:
+            self._say(chat_id, "⏰ Os checks demoraram demais. A rede está fora?")
+            return
         except Exception as exc:  # never leave the chat waiting on a thread
             logger.exception("doctor failed")
             self._say(chat_id, f"💥 Não consegui conferir:\n<code>{html.escape(str(exc))}</code>")

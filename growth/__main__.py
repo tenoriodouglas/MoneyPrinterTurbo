@@ -89,6 +89,20 @@ def _cmd_config(args: argparse.Namespace) -> int:
 
 def _cmd_doctor(args: argparse.Namespace) -> int:
     results = run_checks(skip_network=args.skip_network, niche_id=args.niche)
+    if getattr(args, "json", False):
+        # Machine-readable so the bot can run this as a subprocess. That is how
+        # it reads config.toml fresh: app/config loads the file once at import,
+        # so a long-lived process never sees an edit.
+        print(
+            json.dumps(
+                [
+                    {"name": c.name, "status": c.status, "detail": c.detail, "fix": c.fix}
+                    for c in results
+                ],
+                ensure_ascii=False,
+            )
+        )
+        return 1 if any(c.status == FAIL for c in results) else 0
     marks = {OK: "\033[32m  ok  \033[0m", WARN: "\033[33m warn \033[0m", FAIL: "\033[31m FAIL \033[0m"}
     print()
     for check in results:
@@ -265,6 +279,9 @@ def main(argv: list[str] | None = None) -> int:
         "--niche",
         default=None,
         help="check the material source this pack uses, not the global default",
+    )
+    doctor.add_argument(
+        "--json", action="store_true", help="machine-readable results"
     )
     doctor.set_defaults(func=_cmd_doctor)
 
