@@ -65,7 +65,7 @@ def _bot(client=None, runner=None, allowed=None):
     return GrowthBot(
         client or FakeClient(),
         allowed if allowed is not None else {OWNER},
-        runner=runner or (lambda niche_id, count: {"succeeded": 0, "total": 0, "records": []}),
+        runner=runner or (lambda niche_id, count, **_: {"succeeded": 0, "total": 0, "records": []}),
     )
 
 
@@ -76,7 +76,7 @@ class TestAccessControl(unittest.TestCase):
     def test_a_stranger_cannot_start_a_render(self):
         client = FakeClient()
         started = []
-        bot = _bot(client, runner=lambda n, c: started.append(n) or {})
+        bot = _bot(client, runner=lambda n, c, **_: started.append(n) or {})
         bot.handle(_message("/run ufo-sightings", chat_id=STRANGER, sender_id=STRANGER))
         self.assertEqual(started, [])
 
@@ -91,7 +91,7 @@ class TestAccessControl(unittest.TestCase):
         group = -100123
         client = FakeClient()
         started = []
-        bot = _bot(client, runner=lambda n, c: started.append(n) or {})
+        bot = _bot(client, runner=lambda n, c, **_: started.append(n) or {})
         bot.handle(_message("/run ufo-sightings", chat_id=group, sender_id=STRANGER))
         self.assertEqual(started, [])
 
@@ -105,7 +105,7 @@ class TestAccessControl(unittest.TestCase):
         """Channel posts carry no author to authorise."""
         client = FakeClient()
         started = []
-        bot = _bot(client, runner=lambda n, c: started.append(n) or {})
+        bot = _bot(client, runner=lambda n, c, **_: started.append(n) or {})
         bot.handle({"chat": {"id": OWNER}, "text": "/run ufo-sightings"})
         self.assertEqual(started, [])
 
@@ -141,12 +141,12 @@ class TestCommands(unittest.TestCase):
     def test_run_without_a_niche_shows_usage(self):
         client = FakeClient()
         _bot(client).handle(_message("/run"))
-        self.assertIn("usage", client.texts_to(OWNER))
+        self.assertIn("/niches", client.texts_to(OWNER))
 
     def test_run_with_an_unknown_niche_is_refused(self):
         client = FakeClient()
         started = []
-        bot = _bot(client, runner=lambda n, c: started.append(n) or {})
+        bot = _bot(client, runner=lambda n, c, **_: started.append(n) or {})
         bot.handle(_message("/run not-a-pack"))
         self.assertEqual(started, [])
         self.assertIn("unknown niche", client.texts_to(OWNER))
@@ -154,12 +154,12 @@ class TestCommands(unittest.TestCase):
     def test_status_is_idle_before_anything_runs(self):
         client = FakeClient()
         _bot(client).handle(_message("/status"))
-        self.assertIn("idle", client.texts_to(OWNER))
+        self.assertIn("parado", client.texts_to(OWNER))
 
     def test_a_non_numeric_count_is_rejected(self):
         client = FakeClient()
         _bot(client).handle(_message("/run ufo-sightings many"))
-        self.assertIn("number", client.texts_to(OWNER))
+        self.assertIn("número", client.texts_to(OWNER))
 
     def test_empty_and_non_text_messages_are_ignored(self):
         client = FakeClient()
@@ -176,7 +176,7 @@ class TestRenderQueue(unittest.TestCase):
             video.write_bytes(b"x")
             client = FakeClient()
 
-            def runner(niche_id, count):
+            def runner(niche_id, count, **_):
                 return {
                     "succeeded": 1,
                     "total": 1,
@@ -200,7 +200,7 @@ class TestRenderQueue(unittest.TestCase):
         """Two renders on two cores would take longer than the two in sequence."""
         client = FakeClient()
         release = threading.Event()
-        def blocking(niche_id, count):
+        def blocking(niche_id, count, **_):
             release.wait(timeout=5)
             return {"succeeded": 0, "total": 0, "records": []}
 
@@ -208,12 +208,12 @@ class TestRenderQueue(unittest.TestCase):
         bot.handle(_message("/run ufo-sightings"))
         bot.handle(_message("/run ufo-sightings"))
         release.set()
-        self.assertIn("already rendering", client.texts_to(OWNER))
+        self.assertIn("Já estou fazendo", client.texts_to(OWNER))
 
     def test_a_failing_render_reports_and_frees_the_queue(self):
         client = FakeClient()
 
-        def runner(niche_id, count):
+        def runner(niche_id, count, **_):
             raise bot_module.ProduceError("ffmpeg died")
 
         bot = _bot(client, runner=runner)
@@ -223,13 +223,13 @@ class TestRenderQueue(unittest.TestCase):
         self.assertIn("ffmpeg died", client.texts_to(OWNER))
         client.messages.clear()
         bot.handle(_message("/status"))
-        self.assertIn("idle", client.texts_to(OWNER))
+        self.assertIn("parado", client.texts_to(OWNER))
 
     def test_a_renderer_returning_nonsense_is_reported_not_swallowed(self):
         """The worker runs on its own thread; an escape there would leave the
         chat waiting for a message that never arrives."""
         client = FakeClient()
-        bot = _bot(client, runner=lambda n, c: "not a dict")
+        bot = _bot(client, runner=lambda n, c, **_: "not a dict")
         bot.handle(_message("/run ufo-sightings"))
         self.assertTrue(_wait_idle(bot))
         self.assertIn("not a result", client.texts_to(OWNER))
@@ -238,6 +238,113 @@ class TestRenderQueue(unittest.TestCase):
         client = FakeClient()
         _bot(client)._send_video(OWNER, Path("/nonexistent.mp4"), "")
         self.assertEqual(client.videos, [])
+
+
+class TestProgressReporting(unittest.TestCase):
+    """A render runs for twenty minutes. Silence for that long, in a chat, is
+    indistinguishable from a crash."""
+
+    def test_reaching_a_long_phase_is_announced(self):
+        client = FakeClient()
+
+        def runner(niche_id, count, on_line=None):
+            on_line("downloading videos from the Internet\n")
+            return {"succeeded": 0, "total": 0, "records": []}
+
+        bot = _bot(client, runner=runner)
+        bot.handle(_message("/run ufo-sightings"))
+        self.assertTrue(_wait_idle(bot))
+        self.assertIn("desenhando as cenas", client.texts_to(OWNER))
+
+    def test_the_short_opening_phases_are_not_announced(self):
+        """The four phases before the drawing take about two minutes together;
+        a message for each would be noise, not news."""
+        client = FakeClient()
+
+        def runner(niche_id, count, on_line=None):
+            for line in ("generating video script\n", "generating audio\n"):
+                on_line(line)
+            return {"succeeded": 0, "total": 0, "records": []}
+
+        bot = _bot(client, runner=runner)
+        bot.handle(_message("/run ufo-sightings"))
+        self.assertTrue(_wait_idle(bot))
+        self.assertNotIn("roteiro", client.texts_to(OWNER))
+
+    def test_status_reports_the_phase_while_the_render_runs(self):
+        client = FakeClient()
+        seen = threading.Event()
+        release = threading.Event()
+
+        def runner(niche_id, count, on_line=None):
+            on_line("combining video: 1 => /tmp/a.mp4\n")
+            seen.set()
+            release.wait(timeout=5)
+            return {"succeeded": 0, "total": 0, "records": []}
+
+        bot = _bot(client, runner=runner)
+        bot.handle(_message("/run ufo-sightings"))
+        self.assertTrue(seen.wait(timeout=5))
+        client.messages.clear()
+        bot.handle(_message("/status"))
+        release.set()
+        self.assertIn("montando o vídeo", client.texts_to(OWNER))
+
+    def test_scenes_are_reported_in_batches_not_one_by_one(self):
+        """Twenty scenes take seven minutes. One message each is spam; the
+        phase change alone reports 0/20 and then goes silent."""
+        client = FakeClient()
+
+        def runner(niche_id, count, on_line=None):
+            on_line("downloading videos from the Internet\n")
+            for _ in range(bot_module.SCENES_PER_REPORT * 2):
+                on_line("image material rendered: /tmp/1.mp4\n")
+            return {"succeeded": 0, "total": 0, "records": []}
+
+        bot = _bot(client, runner=runner)
+        bot.handle(_message("/run ufo-sightings"))
+        self.assertTrue(_wait_idle(bot))
+        texts = client.texts_to(OWNER)
+        self.assertIn(f"{bot_module.SCENES_PER_REPORT}/", texts)
+        self.assertIn(f"{bot_module.SCENES_PER_REPORT * 2}/", texts)
+        # The phase change plus one per batch of scenes, not one per scene.
+        scene_updates = [t for _, t in client.messages if "desenhando" in t]
+        self.assertEqual(len(scene_updates), 3)
+
+    def test_a_quiet_phase_still_gets_a_heartbeat(self):
+        """The final render can go twelve minutes without printing a line."""
+        client = FakeClient()
+        release = threading.Event()
+
+        def runner(niche_id, count, on_line=None):
+            on_line("generating video: 1080 x 1920\n")
+            release.wait(timeout=5)
+            return {"succeeded": 0, "total": 0, "records": []}
+
+        bot = _bot(client, runner=runner)
+        with patch.object(bot_module, "HEARTBEAT_SECONDS", 0):
+            with patch.object(bot_module, "HEARTBEAT_TICK", 0.01):
+                bot.handle(_message("/run ufo-sightings"))
+                deadline = time.monotonic() + 5
+                while time.monotonic() < deadline:
+                    if "já faz" in client.texts_to(OWNER):
+                        break
+                    time.sleep(0.01)
+                release.set()
+                self.assertTrue(_wait_idle(bot))
+        self.assertIn("já faz", client.texts_to(OWNER))
+
+    def test_the_heartbeat_stops_with_the_render(self):
+        client = FakeClient()
+        bot = _bot(client)
+        with patch.object(bot_module, "HEARTBEAT_SECONDS", 0):
+            with patch.object(bot_module, "HEARTBEAT_TICK", 0.01):
+                bot.handle(_message("/run ufo-sightings"))
+                self.assertTrue(_wait_idle(bot))
+                time.sleep(0.1)
+                settled = len(client.messages)
+                time.sleep(0.1)
+        self.assertEqual(len(client.messages), settled)
 
 
 class TestUploadLimit(unittest.TestCase):
@@ -252,7 +359,7 @@ class TestUploadLimit(unittest.TestCase):
                 stat.return_value.st_size = bot_module.MAX_UPLOAD_BYTES + 1
                 with patch.object(client, "send_message", side_effect=lambda c, t: sent.append(t)):
                     client.send_video(OWNER, big)
-        self.assertIn("over the", sent[0])
+        self.assertIn(str(temp), sent[0])
         self.assertIn("big.mp4", sent[0])
 
 

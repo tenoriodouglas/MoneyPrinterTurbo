@@ -26,6 +26,7 @@ from loguru import logger
 from growth.niche import NicheError, load_all_niches, load_niche
 from growth.plan import PlanError, create_plan
 from growth.produce import ProduceError, produce
+from growth.progress import ProgressTracker
 from growth.review import FAIL, review_all
 
 API_ROOT = "https://api.telegram.org"
@@ -41,10 +42,24 @@ RETRY_DELAY = 5
 # Rejections in a row before giving up. A couple of retries cover a webhook
 # being removed as the bot starts; beyond that the cause is not transient.
 MAX_REJECTIONS = 3
+# How often to speak up unprompted while a render runs, and how often to check
+# whether it is time to. The final render phase can go twelve minutes without
+# printing a single line, and silence that long reads as a crash.
+HEARTBEAT_SECONDS = 300
+HEARTBEAT_TICK = 15
+# Scenes between updates while images are being drawn. One message per scene
+# would be twenty in seven minutes; the phase change alone would report 0/20
+# and then say nothing until the next phase.
+SCENES_PER_REPORT = 5
 
 
 class BotError(RuntimeError):
     """Raised when the bot cannot start or cannot reach Telegram."""
+
+
+# Phases worth interrupting someone for. The four before these take about
+# two minutes together, so announcing each would be noise.
+NOTABLE_PHASES = frozenset({"materials", "combining", "rendering"})
 
 
 @dataclass
@@ -54,11 +69,21 @@ class RenderJob:
     niche_id: str
     count: int
     chat_id: int
+    tracker: ProgressTracker = field(default_factory=ProgressTracker)
     started_at: float = field(default_factory=time.monotonic)
+    # When the chat last heard anything, so the heartbeat stays quiet while
+    # phase changes are already carrying the news.
+    last_report: float = field(default_factory=time.monotonic)
+    # Scene count at the last update, so one is never sent twice.
+    scenes_reported: int = 0
+
+    @property
+    def elapsed_seconds(self) -> float:
+        return time.monotonic() - self.started_at
 
     @property
     def elapsed_minutes(self) -> float:
-        return (time.monotonic() - self.started_at) / 60
+        return self.elapsed_seconds / 60
 
 
 class TelegramClient:
@@ -117,9 +142,9 @@ class TelegramClient:
         if size > MAX_UPLOAD_BYTES:
             self.send_message(
                 chat_id,
-                f"{html.escape(path.name)} is {size / 1024 / 1024:.0f} MB, over the "
-                f"{MAX_UPLOAD_BYTES // 1024 // 1024} MB a bot may upload.\n"
-                f"It is on the server at <code>{html.escape(str(path))}</code>",
+                f"📦 {html.escape(path.name)} tem {size / 1024 / 1024:.0f} MB e o "
+                f"telegram só deixa um bot enviar {MAX_UPLOAD_BYTES // 1024 // 1024} MB.\n"
+                f"Ele está no servidor em <code>{html.escape(str(path))}</code>",
             )
             return
         with path.open("rb") as handle:
@@ -157,23 +182,71 @@ class GrowthBot:
 
     # -- rendering ---------------------------------------------------------
 
-    def _render(self, niche_id: str, count: int) -> dict[str, Any]:
+    def _render(
+        self, niche_id: str, count: int, on_line: Callable[[str], None] | None = None
+    ) -> dict[str, Any]:
         plan = create_plan(niche_id, count=count)
-        return produce(Path(plan["plan_file"]).parent, quiet=True)
+        return produce(
+            Path(plan["plan_file"]).parent, quiet=True, on_line=on_line
+        )
+
+    def _progress_report(self, job: RenderJob) -> None:
+        """Tell the chat where the render is, and reset the heartbeat clock."""
+        job.last_report = time.monotonic()
+        self._say(
+            job.chat_id,
+            f"⏳ {job.tracker.progress.describe(job.elapsed_seconds)}\n"
+            f"🕐 já faz {job.elapsed_minutes:.0f} min",
+        )
+
+    def _heartbeat(self, job: RenderJob, done: threading.Event) -> None:
+        """Speak up when a phase goes quiet for too long.
+
+        Phase changes alone would leave a twelve-minute gap during the final
+        render, which is exactly when someone starts wondering if it died.
+        """
+        while not done.wait(HEARTBEAT_TICK):
+            if time.monotonic() - job.last_report >= HEARTBEAT_SECONDS:
+                self._progress_report(job)
 
     def _run_job(self, job: RenderJob) -> None:
         """Render, then report. Runs on its own thread, so nothing here may
         raise: an escaping exception would leave the chat waiting forever for
         a message that never comes."""
+        def watch(line: str) -> None:
+            changed = job.tracker.feed(line)
+            progress = job.tracker.progress
+            if changed:
+                if progress.phase in NOTABLE_PHASES:
+                    self._progress_report(job)
+                return
+            # Not a phase change, so the only news worth sending is another
+            # handful of finished scenes.
+            done = progress.scenes_done
+            if done and done % SCENES_PER_REPORT == 0 and done != job.scenes_reported:
+                job.scenes_reported = done
+                self._progress_report(job)
+
+        done = threading.Event()
+        threading.Thread(
+            target=self._heartbeat, args=(job, done), daemon=True
+        ).start()
         try:
-            result = self._runner(job.niche_id, job.count)
+            result = self._runner(job.niche_id, job.count, on_line=watch)
             self._report(job, result)
         except (PlanError, ProduceError, NicheError) as exc:
-            self._say(job.chat_id, f"❌ render failed: {html.escape(str(exc))}")
+            self._say(
+                job.chat_id,
+                f"❌ O render falhou 😕\n<code>{html.escape(str(exc))}</code>",
+            )
         except Exception as exc:  # a crash must not take the bot down with it
             logger.exception("render job failed")
-            self._say(job.chat_id, f"❌ unexpected failure: {html.escape(str(exc))}")
+            self._say(
+                job.chat_id,
+                f"💥 Algo inesperado quebrou:\n<code>{html.escape(str(exc))}</code>",
+            )
         finally:
+            done.set()
             with self._lock:
                 self._job = None
 
@@ -182,10 +255,18 @@ class GrowthBot:
             raise BotError(f"the renderer returned {type(result).__name__}, not a result")
         succeeded = result.get("succeeded", 0)
         total = result.get("total", 0)
-        self._say(
-            job.chat_id,
-            f"✅ rendered {succeeded}/{total} in {job.elapsed_minutes:.0f} min",
-        )
+        if succeeded:
+            self._say(
+                job.chat_id,
+                f"✅ <b>Prontinho!</b> {succeeded} de {total} vídeo(s) em "
+                f"{job.elapsed_minutes:.0f} min.\n📤 Mandando agora…",
+            )
+        else:
+            self._say(
+                job.chat_id,
+                f"😕 Terminei em {job.elapsed_minutes:.0f} min, mas nenhum dos "
+                f"{total} vídeo(s) saiu. Dá uma olhada no log do servidor.",
+            )
         for record in result.get("records", []):
             if record.get("status") != "succeeded":
                 continue
@@ -198,7 +279,10 @@ class GrowthBot:
         try:
             self.client.send_video(chat_id, path, caption)
         except (BotError, requests.RequestException) as exc:
-            self._say(chat_id, f"⚠️ could not send {html.escape(path.name)}: {exc}")
+            self._say(
+                chat_id,
+                f"⚠️ Não consegui enviar {html.escape(path.name)}: {html.escape(str(exc))}",
+            )
 
     def _say(self, chat_id: int, text: str) -> None:
         try:
@@ -210,66 +294,87 @@ class GrowthBot:
 
     def _cmd_start(self, chat_id: int, _: list[str]) -> str:
         return (
-            "<b>Growth bot</b>\n\n"
-            "/niches — packs and what they earn\n"
-            "/run &lt;niche&gt; [count] — render a batch\n"
-            "/status — what is running now\n"
-            "/review — check recent videos before posting\n"
-            "/last [n] — resend recent videos"
+            "👋 <b>Oi! Eu faço os vídeos pra você.</b>\n\n"
+            "🎬 /run &lt;nicho&gt; [quantos] — começar um lote\n"
+            "📊 /status — o que estou fazendo agora\n"
+            "🗂 /niches — os packs e quanto rendem\n"
+            "🔍 /review — conferir os vídeos antes de postar\n"
+            "📤 /last [n] — reenviar os vídeos mais recentes\n\n"
+            "Comece com <code>/run ufo-sightings</code> 🛸\n"
+            "Vou avisando o progresso por aqui e mando o vídeo quando ficar pronto 😉"
         )
 
     def _cmd_niches(self, _: int, __: list[str]) -> str:
         packs = load_all_niches()
         if not packs:
-            return "no niche packs found"
-        lines = ["<b>Packs</b>, best estimated return first:"]
+            return "🤔 Não achei nenhum pack de nicho."
+        lines = ["🗂 <b>Packs disponíveis</b>, maior retorno estimado primeiro:\n"]
         for pack in packs:
             low, high = pack.economics.rpm_range
             lines.append(
-                f"<code>{pack.id}</code> — RPM ${low:.2f}-${high:.2f}, "
-                f"{pack.economics.competition} competition"
+                f"• <code>{pack.id}</code>\n"
+                f"   💰 RPM ${low:.2f}-${high:.2f} · 🥊 concorrência "
+                f"{pack.economics.competition}"
             )
+        lines.append("\nPara usar: <code>/run &lt;nicho&gt;</code>")
         return "\n".join(lines)
 
     def _cmd_run(self, chat_id: int, args: list[str]) -> str:
         if not args:
-            return "usage: /run &lt;niche&gt; [count] — see /niches"
+            return "🤔 Me diz qual nicho: <code>/run &lt;nicho&gt; [quantos]</code>\nVeja a lista em /niches"
         niche_id = args[0]
         try:
             niche = load_niche(niche_id)
         except NicheError as exc:
-            return f"❌ {html.escape(str(exc))}"
+            return f"❌ {html.escape(str(exc))}\n\nVeja os nomes válidos em /niches"
 
         count = 1
         if len(args) > 1:
             try:
                 count = max(1, min(int(args[1]), 5))
             except ValueError:
-                return "count must be a number"
+                return "🔢 A quantidade precisa ser um número, tipo <code>/run ufo-sightings 2</code>"
 
         with self._lock:
             if self._job is not None:
+                job = self._job
                 return (
-                    f"⏳ already rendering {self._job.niche_id}, "
-                    f"{self._job.elapsed_minutes:.0f} min in. One at a time."
+                    f"⏳ Calma aí! Já estou fazendo <code>{job.niche_id}</code> "
+                    f"há {job.elapsed_minutes:.0f} min.\n"
+                    f"{job.tracker.progress.describe(job.elapsed_seconds)}\n\n"
+                    "Faço um de cada vez pra não travar a máquina 🙂"
                 )
-            job = RenderJob(niche_id=niche.id, count=count, chat_id=chat_id)
+            # One image per scene, so the count is known before it starts.
+            scenes = 0
+            if niche.video.target_seconds:
+                scenes = round(niche.video.target_seconds / max(niche.video.clip_duration, 1))
+            job = RenderJob(
+                niche_id=niche.id,
+                count=count,
+                chat_id=chat_id,
+                tracker=ProgressTracker(scenes_total=scenes),
+            )
             self._job = job
 
         threading.Thread(target=self._run_job, args=(job,), daemon=True).start()
         return (
-            f"▶️ rendering {count} × <code>{niche.id}</code>.\n"
-            f"Roughly {20 * count} minutes; the videos arrive here when done."
+            f"▶️ Beleza! Fazendo {count} vídeo(s) de <code>{niche.id}</code> 🎬\n"
+            f"⏱ Leva uns {20 * count} min.\n"
+            "Vou te avisando aqui a cada etapa — ou pergunte /status quando quiser 😉"
         )
 
     def _cmd_status(self, _: int, __: list[str]) -> str:
         with self._lock:
             job = self._job
         if job is None:
-            return "idle"
+            return (
+                "😴 Tudo parado por aqui, nada rodando.\n"
+                "Manda um <code>/run &lt;nicho&gt;</code> que eu começo 🎬"
+            )
         return (
-            f"⏳ {job.niche_id}, {job.count} video(s), "
-            f"running for {job.elapsed_minutes:.0f} min"
+            f"🎬 <b>{html.escape(job.niche_id)}</b> — {job.count} vídeo(s)\n"
+            f"{job.tracker.progress.describe(job.elapsed_seconds)}\n"
+            f"🕐 rodando há {job.elapsed_minutes:.0f} min"
         )
 
     def _cmd_review(self, _: int, args: list[str]) -> str:
@@ -281,13 +386,13 @@ class GrowthBot:
                 pass
         reviews = review_all(limit=limit)
         if not reviews:
-            return "nothing produced yet"
-        lines = []
+            return "📭 Ainda não produzi nada. Manda um <code>/run</code> 🎬"
+        lines = ["🔍 <b>Últimos vídeos</b>:\n"]
         for item in reviews:
             mark = "❌" if item.status == FAIL else "✅"
             lines.append(
                 f"{mark} {html.escape(item.subject[:48])} — "
-                f"{item.duration:.0f}s, {item.words} words"
+                f"{item.duration:.0f}s, {item.words} palavras"
             )
             for _level, message in item.issues:
                 lines.append(f"   ↳ {html.escape(message)}")
@@ -302,10 +407,11 @@ class GrowthBot:
                 pass
         reviews = review_all(limit=count)
         if not reviews:
-            return "nothing produced yet"
+            return "📭 Ainda não produzi nada. Manda um <code>/run</code> 🎬"
+        self._say(chat_id, f"📤 Enviando {min(count, len(reviews))} vídeo(s)…")
         for item in reviews[-count:]:
             self._send_video(chat_id, item.path, item.subject)
-        return f"sending {min(count, len(reviews))} video(s)"
+        return ""
 
     COMMANDS: dict[str, str] = {
         "/start": "_cmd_start",
@@ -335,8 +441,8 @@ class GrowthBot:
             )
             self._say(
                 chat_id,
-                "This bot only answers its owner.\n"
-                f"Your telegram user id is <code>{sender_id or 'unknown'}</code>.",
+                "🔒 Este bot só responde ao dono.\n"
+                f"Seu id de usuário no telegram é <code>{sender_id or 'desconhecido'}</code>.",
             )
             return
 
@@ -345,7 +451,7 @@ class GrowthBot:
         command = parts[0].split("@", 1)[0].lower()
         handler_name = self.COMMANDS.get(command)
         if handler_name is None:
-            self._say(chat_id, "unknown command — try /help")
+            self._say(chat_id, "🤨 Não conheço esse comando. Tenta /help 🙂")
             return
         reply = getattr(self, handler_name)(chat_id, parts[1:])
         if reply:

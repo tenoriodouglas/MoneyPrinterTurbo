@@ -17,7 +17,9 @@ import time
 import sys
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any
+from typing import Any, Callable
+
+from loguru import logger
 
 from growth.niche import load_niche
 
@@ -61,12 +63,18 @@ def _caption(brief: dict[str, Any], niche_hashtags: list[str]) -> str:
     return f"{body}\n\n{tags}".strip()
 
 
-def _tee_stdout(process: subprocess.Popen, timeout: int) -> tuple[str, str | None]:
-    """Echo the engine's output as it arrives and keep it for the summary.
+def _read_stdout(
+    process: subprocess.Popen,
+    timeout: int,
+    echo: bool,
+    on_line: Callable[[str], None] | None,
+) -> str:
+    """Consume the engine's output as it arrives and keep it for the summary.
 
     Reading line by line rather than with communicate() is what makes a render
-    visible while it runs; the deadline is enforced per line, so a stalled
-    engine is still killed rather than waited on forever.
+    observable while it runs, whether that means echoing it to a terminal or
+    handing each line to a caller tracking progress. The deadline is enforced
+    per line, so a stalled engine is killed rather than waited on forever.
     """
     deadline = time.monotonic() + timeout
     collected: list[str] = []
@@ -74,7 +82,13 @@ def _tee_stdout(process: subprocess.Popen, timeout: int) -> tuple[str, str | Non
     try:
         for line in process.stdout:
             collected.append(line.rstrip("\n"))
-            print(line, end="", file=sys.stderr, flush=True)
+            if echo:
+                print(line, end="", file=sys.stderr, flush=True)
+            if on_line is not None:
+                try:
+                    on_line(line)
+                except Exception:  # a watcher must not kill the render
+                    logger.exception("progress callback failed")
             if time.monotonic() > deadline:
                 raise subprocess.TimeoutExpired(cmd="cli.py", timeout=timeout)
         remaining = max(1, int(deadline - time.monotonic()))
@@ -83,7 +97,7 @@ def _tee_stdout(process: subprocess.Popen, timeout: int) -> tuple[str, str | Non
         process.kill()
         process.wait()
         raise ProduceError(f"batch timed out after {timeout}s") from exc
-    return "\n".join(collected), None
+    return "\n".join(collected)
 
 
 def run_batch(
@@ -91,10 +105,12 @@ def run_batch(
     stop_at: str = "video",
     timeout: int = DEFAULT_TIMEOUT_SECONDS,
     quiet: bool = False,
+    on_line: Callable[[str], None] | None = None,
 ) -> dict[str, Any]:
     """Invoke the render CLI on a manifest and return its JSON summary.
 
-    quiet captures the engine's log instead of letting it reach the terminal.
+    quiet keeps the engine's log off the terminal; on_line receives every line
+    either way, which is how a caller follows a render it is not watching.
     """
     if not manifest.is_file():
         raise ProduceError(f"manifest not found: {manifest}")
@@ -107,37 +123,28 @@ def run_batch(
         stop_at,
     ]
     # The engine installs its own log sink on stdout and prints its JSON
-    # summary there too, so stdout has to be captured to find the summary and
-    # echoed to keep the render visible. Letting stderr through alone leaves
-    # the terminal silent for the length of a render and throws away the log
-    # that explains any failure.
-    stderr_target = subprocess.PIPE if quiet else None
+    # summary there too, so stdout carries both and must be read line by line:
+    # to find the summary, to keep the render visible, and to follow progress.
+    # stderr is discarded when quiet rather than piped and ignored, which would
+    # deadlock the child once the pipe filled.
     try:
         process = subprocess.Popen(
             command,
             cwd=REPO_ROOT,
             stdout=subprocess.PIPE,
-            stderr=stderr_target,
+            stderr=subprocess.DEVNULL if quiet else None,
             text=True,
             bufsize=1,
         )
     except OSError as exc:
         raise ProduceError(f"could not start the render CLI: {exc}") from exc
 
-    if quiet:
-        try:
-            stdout, stderr = process.communicate(timeout=timeout)
-        except subprocess.TimeoutExpired as exc:
-            process.kill()
-            process.communicate()
-            raise ProduceError(f"batch timed out after {timeout}s") from exc
-    else:
-        stdout, stderr = _tee_stdout(process, timeout)
+    stdout = _read_stdout(process, timeout, echo=not quiet, on_line=on_line)
 
     # Exit 1 means some tasks failed but a summary was still printed; exit 2
     # means the manifest was rejected before anything ran and there is none.
     if process.returncode == 2 or not (stdout or "").strip():
-        detail = _diagnostics(stderr, stdout)
+        detail = _diagnostics(stdout)
         if not quiet:
             # Its log went straight to the terminal, so point there instead of
             # claiming there was no output.
@@ -222,6 +229,7 @@ def produce(
     stop_at: str = "video",
     timeout: int = DEFAULT_TIMEOUT_SECONDS,
     quiet: bool = False,
+    on_line: Callable[[str], None] | None = None,
 ) -> dict[str, Any]:
     """Render a plan directory end to end and record the results."""
     plan_file = plan_dir / "plan.json"
@@ -229,7 +237,9 @@ def produce(
     if not plan_file.is_file():
         raise ProduceError(f"plan.json not found in {plan_dir}")
 
-    summary = run_batch(manifest, stop_at=stop_at, timeout=timeout, quiet=quiet)
+    summary = run_batch(
+        manifest, stop_at=stop_at, timeout=timeout, quiet=quiet, on_line=on_line
+    )
     records = collect(plan_file, summary)
     append_ledger(records)
 

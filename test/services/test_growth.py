@@ -322,13 +322,15 @@ class TestRunBatch(unittest.TestCase):
             _, popen = self._run(manifest)
         self.assertIsNone(popen.call_args.kwargs["stderr"])
 
-    def test_quiet_captures_the_engine_log(self):
+    def test_quiet_discards_the_engine_log_rather_than_piping_it(self):
+        """A pipe nobody reads fills up and blocks the child forever, which is
+        how a quiet render turns into a hung one."""
         with tempfile.TemporaryDirectory() as temp:
             manifest = Path(temp) / "manifest.jsonl"
             manifest.write_text("{}\n", encoding="utf-8")
             _, popen = self._run(manifest, quiet=True)
         self.assertEqual(
-            popen.call_args.kwargs["stderr"], produce_module.subprocess.PIPE
+            popen.call_args.kwargs["stderr"], produce_module.subprocess.DEVNULL
         )
 
     def test_summary_is_read_from_stdout(self):
@@ -367,10 +369,13 @@ class TestRunBatch(unittest.TestCase):
         process.kill.assert_called_once()
 
     def test_timeout_kills_the_render_when_quiet(self):
+        """Quiet reads the same stream; only the echo to the terminal differs,
+        so the deadline has to bite either way."""
         process = unittest.mock.MagicMock()
-        process.communicate.side_effect = [
+        process.stdout = iter(["a line\n"])
+        process.wait.side_effect = [
             produce_module.subprocess.TimeoutExpired(cmd="cli.py", timeout=1),
-            ("", None),
+            0,
         ]
         with tempfile.TemporaryDirectory() as temp:
             manifest = Path(temp) / "manifest.jsonl"
@@ -379,6 +384,41 @@ class TestRunBatch(unittest.TestCase):
                 with self.assertRaises(produce_module.ProduceError):
                     produce_module.run_batch(manifest, timeout=1, quiet=True)
         process.kill.assert_called_once()
+
+    def test_every_line_reaches_a_watcher(self):
+        """The bot follows a render it cannot see by reading these lines."""
+        summary = json.dumps({"total": 1, "succeeded": 1, "failed": 0, "tasks": []})
+        log = f"generating audio\ncombining video: 1\n{summary}\n"
+        seen: list[str] = []
+        with tempfile.TemporaryDirectory() as temp:
+            manifest = Path(temp) / "manifest.jsonl"
+            manifest.write_text("{}\n", encoding="utf-8")
+            with patch(
+                "growth.produce.subprocess.Popen",
+                return_value=self._fake_process(log),
+            ):
+                produce_module.run_batch(manifest, quiet=True, on_line=seen.append)
+        self.assertIn("generating audio\n", seen)
+        self.assertIn("combining video: 1\n", seen)
+
+    def test_a_watcher_that_raises_does_not_kill_the_render(self):
+        """The callback runs on the thread reading the engine; an escape there
+        would abort a render that was going fine, to report progress."""
+        summary = json.dumps({"total": 1, "succeeded": 1, "failed": 0, "tasks": []})
+        with tempfile.TemporaryDirectory() as temp:
+            manifest = Path(temp) / "manifest.jsonl"
+            manifest.write_text("{}\n", encoding="utf-8")
+            with patch(
+                "growth.produce.subprocess.Popen",
+                return_value=self._fake_process(f"a line\n{summary}\n"),
+            ):
+                def boom(_line):
+                    raise RuntimeError("telegram is down")
+
+                result = produce_module.run_batch(
+                    manifest, quiet=True, on_line=boom
+                )
+        self.assertEqual(result["succeeded"], 1)
 
     def test_the_engine_log_is_echoed_while_it_runs(self):
         """Swallowing it leaves the terminal silent and discards the reason for
