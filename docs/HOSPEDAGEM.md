@@ -48,6 +48,27 @@ Duas conclusões que mudam a escolha de servidor:
 2. **O gargalo é CPU de render**, e ele escala com a duração do vídeo, não com
    o número de cenas.
 
+## Quantos núcleos valem a pena
+
+A mesma combinação de vídeo, com a CPU limitada por `taskset`:
+
+| Núcleos | Tempo | CPU usada | Pico de RAM |
+|---|---|---|---|
+| 4 | 155 s | 272% | 573 MB |
+| 2 | 224 s | 184% | 572 MB |
+
+**Metade dos núcleos custa +44% de tempo, não +100%.** A razão está na coluna
+do meio: o render satura perto de **2,7 núcleos** e não usa mais que isso.
+
+Isso inverte a intuição de que uma máquina de 16 núcleos seria muito melhor que
+uma VPS de 2. Para **um** vídeo por vez ela não é: os núcleos extras ficam
+ociosos. Só ajudariam rodando vários renders em paralelo — o que o bot
+deliberadamente não faz, porque dois renders disputando os mesmos núcleos
+terminam depois que os mesmos dois em sequência.
+
+Consequência prática: **2 núcleos bastam**, e a escolha entre servidor e máquina
+local deixa de ser sobre velocidade. Passa a ser sobre disponibilidade.
+
 ## O que o app exige de verdade
 
 - **CPU**: é o único gargalo. Render é ffmpeg, puro CPU.
