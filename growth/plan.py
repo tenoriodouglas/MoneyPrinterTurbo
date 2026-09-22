@@ -21,7 +21,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-from growth.niche import MAX_SCRIPT_PROMPT, Niche, load_niche
+from growth.niche import MAX_SCRIPT_PROMPT, Niche, load_niche, mood_tracks
 
 STORAGE_DIR = Path(__file__).resolve().parent.parent / "storage" / "growth"
 HISTORY_DIR = STORAGE_DIR / "history"
@@ -32,6 +32,15 @@ HISTORY_LOOKBACK = 60
 # Enum values from VideoParams.VideoTransitionMode; the manifest is parsed as
 # raw VideoParams, so it needs the value, not the CLI's dashed spelling.
 _TRANSITIONS = ("Shuffle", "FadeIn", "FadeOut", "SlideIn", "SlideOut")
+# Where a batch enters a pack's mood folder. One draw per BATCH, shared by
+# every brief in it: drawing per brief would repeat a track once in
+# len(tracks) inside a single batch, and drawing once per process would give
+# every batch the same entry point — which in the bot, a process that runs for
+# days, means every video it ever makes takes the same track. Both are the
+# monotony the mood folders exist to end.
+def new_mood_rotation(seed: int | None = None) -> int:
+    """An entry point into a mood folder, reproducible when seeded."""
+    return random.Random(seed).randrange(1 << 30)
 
 
 class PlanError(RuntimeError):
@@ -327,12 +336,41 @@ def _build_terms(brief: Brief, niche: Niche, clip_seconds: int) -> list[str]:
     return [unique[index % len(unique)] for index in range(needed)]
 
 
+def _music_keys(brief: Brief, niche: Niche, rotation: int) -> dict[str, Any]:
+    """The bgm fields one task carries, decided by the pack.
+
+    Three cases. A pack that names an AI provider sends that provider its own
+    prompt. A pack with a mood folder takes one track out of it. A pack with
+    neither keeps the engine's random pick over every built-in song, which is
+    what makes a ghost story and a finance video sound alike.
+    """
+    music = niche.music
+    if music.uses_ai:
+        # The pack loader has already checked the provider is one the engine
+        # can call and that the prompt fits VideoParams.video_music_prompt.
+        return {"bgm_type": music.provider, "video_music_prompt": music.prompt}
+
+    tracks = mood_tracks(music.mood)
+    if not tracks:
+        return {"bgm_type": "random"}
+    # Walked by the brief's position from the batch's entry point, so
+    # consecutive videos take different tracks while the folder has unused
+    # ones, and the same seed reproduces the same walk.
+    track = tracks[(rotation + brief.index) % len(tracks)]
+    # cli.py accepts bgm_file only alongside bgm_type=custom and rejects the
+    # whole manifest otherwise (_validate_batch_task_params), so the mood pick
+    # cannot be spelled as "random". app/services/bgm.py resolve_bgm_file then
+    # takes "<mood>/<track>" relative to resource/songs.
+    return {"bgm_type": "custom", "bgm_file": f"{music.mood}/{track}"}
+
+
 def to_manifest_entry(
     brief: Brief,
     niche: Niche,
     seed: int | None = None,
     aspect: str | None = None,
     paragraphs: int | None = None,
+    rotation: int | None = None,
 ) -> dict[str, Any]:
     """Build one `cli.py --batch-file` task.
 
@@ -342,6 +380,8 @@ def to_manifest_entry(
     longer 16:9 cut without a second pack.
     """
     rng = random.Random(f"{seed}:{brief.subject}" if seed is not None else None)
+    if rotation is None:
+        rotation = new_mood_rotation(seed)
     video = niche.video
     clip_seconds = rng.choice([video.clip_duration, video.clip_duration + 1])
     terms = _build_terms(brief, niche, clip_seconds)
@@ -365,7 +405,10 @@ def to_manifest_entry(
         "video_count": 1,
         "voice_name": brief.voice_name or (video.voice_names[0] if video.voice_names else ""),
         "voice_rate": video.voice_rate,
-        "bgm_type": "random",
+        # bgm_type, and with it bgm_file or video_music_prompt, come from the
+        # pack: 29 built-in songs within 4 dB of each other are one sound, not
+        # a channel's.
+        **_music_keys(brief, niche, rotation),
         "bgm_volume": video.bgm_volume,
         "subtitle_enabled": True,
         "subtitle_position": video.subtitle_position,
@@ -432,13 +475,18 @@ def create_plan(
     niche = load_niche(niche_id)
     briefs = generate_briefs(niche, count, app_config=app_config, theme=theme)
     assign_voices(briefs, niche, seed=seed)
+    # One entry point for the whole batch, so its videos walk the mood folder
+    # from the same place rather than each drawing independently.
+    rotation = new_mood_rotation(seed)
 
     stamp = datetime.now(timezone.utc).strftime("%Y%m%d-%H%M%S")
     directory = out_dir or (PLANS_DIR / f"{niche_id}-{stamp}")
     directory.mkdir(parents=True, exist_ok=True)
 
     entries = [
-        to_manifest_entry(b, niche, seed=seed, aspect=aspect, paragraphs=paragraphs)
+        to_manifest_entry(
+            b, niche, seed=seed, aspect=aspect, paragraphs=paragraphs, rotation=rotation
+        )
         for b in briefs
     ]
     manifest_path = directory / "manifest.jsonl"
