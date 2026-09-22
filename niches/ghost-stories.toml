@@ -1,0 +1,175 @@
+# Entertainment rates, not finance rates. What this niche has instead is watch
+# time and reshares, and like the other folklore pack it is one where generated
+# illustration beats stock outright: no stock library holds "a hallway lamp
+# that was lit a second ago".
+
+[niche]
+id = "ghost-stories"
+name = "Ghost Stories and Hauntings"
+language = "en"
+platforms = ["tiktok", "youtube_shorts"]
+
+[economics]
+# Same ad tier as the other folklore pack, a shade under it because the shelf
+# is far more crowded: a new channel here waits longer to see the top of the
+# band. Honest numbers, not aspirational ones.
+cpm_low = 2.5
+cpm_high = 7.0
+competition = "high"
+
+[audience]
+description = "People who want to be unsettled rather than startled: listeners who read the regional legends, ask which version the locals actually tell, and stay for the quiet detail instead of the scream."
+pain_points = [
+    "narrators who swear a legend is documented fact and name a victim who never existed",
+    "the whole scare stacked into the last three seconds, with nothing built before it",
+    "a story cut in half so the ending becomes part two tomorrow",
+    "stock footage of a generic dark corridor while a specific house is described",
+    "gore standing in for atmosphere",
+    "the same five famous hauntings retold with no local detail",
+]
+
+[content]
+angles = [
+    "long-haunted-place: one location with a long record of accounts, and what they have in common",
+    "one-night: a single night at a single place, told start to finish",
+    "local-versus-tourist: the version the town tells against the version sold at the gate",
+    "explained-later: a well-known account that turned out to have an ordinary cause",
+    "haunted-object: a thing rather than a building, and where it has been",
+    "the-skeptic: the story as told by the person who walked in not believing it",
+    "origin-of-the-legend: how the tale started, and what it picked up along the way",
+    "the-rule: the local rule about a door, a road or an hour, and the story told to enforce it",
+]
+system_prompt = """
+You write voiceover scripts for a faceless short-form channel about ghost
+stories, hauntings and local legend.
+
+The frame decides everything else: these are stories people tell. A legend, an
+account someone gave, a thing a town has said for a hundred years. You present
+them as exactly that. You are not reporting a finding, you are telling the tale
+the way it gets told, and the listener is never confused about which of the two
+they are hearing.
+
+Voice: someone recounting a story late at night, unhurried, who trusts the
+details to do the work and never raises their voice to sell a moment.
+
+Hard rules:
+- Open inside the story: the place, the hour, the person, and what they say
+  happened. No greeting, no channel name, no "have you ever wondered".
+- One story per script. Never a countdown of hauntings.
+- Tell it as telling, not as fact. "The story goes", "the people who worked
+  there said", "the version they tell in the valley". Never state as
+  established fact that a place is haunted or that a ghost exists.
+- Atmosphere is the product. Build dread out of detail: the cold, the sound,
+  the distance, the ordinary thing that is slightly wrong. What you withhold
+  does more work than what you show.
+- Close on the image that stays with the listener. Never a jump scare in the
+  last line, never a cliffhanger, never a part two, never a request for likes,
+  follows or comments. The story ends inside this video.
+- Plain spoken English. No markdown, no headings, no emoji, no stage
+  directions, no speaker labels, no sound effects written out. Output only the
+  words to be read aloud.
+
+Limits, which are the entire difference between folklore and a lie:
+- Never present folklore as verified. Where a story is widely told but
+  unproven, say so plainly. It costs nothing and it is the honest frame.
+- Never invent a real named person, a real street address, or a real death and
+  present it as documented. Telling a well-known public legend is fine: a
+  famous hotel, a widely told regional tale, a place that sells tickets on the
+  strength of its own story. Fabricating a specific real victim is not, ever.
+- Do not name, identify or locate a private individual, living or dead. No real
+  family's house, no current resident, no address a viewer could drive to.
+- No gore. No real crime scenes, no real murders, no recent tragedy retold as
+  entertainment. If a story only works through someone's actual death, do not
+  tell it.
+- Where a story has a known ordinary explanation, you may tell the story and
+  give the explanation. Never hide one in order to keep the scare.
+"""
+script_guidance = """
+Target 180-220 words, which reads as 70-85 seconds of speech. TikTok pays only
+above one minute, so do not come in short.
+Structure: the place and who is in it, the ordinary detail before anything is
+wrong, the first thing out of place, how far it went, and the one image left
+behind. Spend the most words on the middle, where the dread is actually built.
+"""
+banned_phrases = [
+    "in today's video",
+    "have you ever wondered",
+    "what happened next will shock you",
+    "you won't believe",
+    "let's dive in",
+    "part two tomorrow",
+    "like and subscribe",
+    "this is a true story",
+    "the most haunted place on earth",
+    "turn back now",
+]
+seed_topics = [
+    "a building with a century of accounts from the people who worked in it",
+    "one night told hour by hour, from arrival to morning",
+    "the version a town tells against the version sold to visitors",
+    "a legend that a later explanation fully accounted for",
+    "an object that carried its story from owner to owner",
+    "a rule about a road or a door, and the tale told to keep people to it",
+]
+# Scene descriptions, not keywords: the image model draws what it is told, so
+# these describe a frame rather than a topic.
+visual_terms = [
+    "a long hotel corridor at night lit by one failing wall lamp",
+    "an empty rocking chair in a dim parlour with the heavy curtains drawn",
+    "a lone figure holding a lantern at the foot of a dark wooden staircase",
+    "a fog-covered country road at night with a single distant streetlight",
+    "an abandoned farmhouse seen from the treeline under a low grey sky",
+    "an old porcelain doll sitting upright on a shelf in a shuttered room",
+    "a lighthouse on a cliff in heavy mist with one window still lit",
+    "a tall mirror in an unlit hallway reflecting an open doorway",
+]
+
+[video]
+aspect = "9:16"
+# Illustration generated from the script, not stock footage searched by
+# keyword: it is the only way the picture matches the room being described.
+video_source = "openai_image"
+# The generator makes one image per search term and stops when the terms run
+# out, covered narration or not. This is how many seconds of narration the term
+# count has to cover; a little above the script's own target so the tail is
+# never short.
+target_seconds = 100
+match_materials_to_script = true
+voice_names = [
+    "en-US-ChristopherNeural",
+    "en-US-SteffanNeural",
+    "en-US-AriaNeural",
+    "en-US-RogerNeural",
+]
+# Slower than a reporting pack: dread needs the pauses, and a rushed read turns
+# the quiet details into filler.
+voice_rate = 0.92
+font_size = 72
+stroke_width = 3.5
+subtitle_position = "custom"
+custom_position = 62.0
+subtitle_display_mode = "word_by_word"
+subtitle_animation = "pop_spring"
+clip_duration = 5
+paragraph_number = 6
+# The ambient bed does real work in this genre, so it sits a little louder than
+# elsewhere while staying well under the narration.
+bgm_volume = 0.2
+
+[images]
+# Pollinations exposes an OpenAI-compatible image endpoint and its Flux model
+# is free, which is what makes an illustrated pack viable at zero cost.
+base_url = "https://gen.pollinations.ai/v1"
+model = "flux"
+# One template across every video is what gives the channel a look of its own.
+# Shadow carries the dread here, so the style is pushed toward heavy ink and a
+# cold, drained palette rather than the brighter retro look of other packs.
+prompt_template = "vintage horror comic panel illustration of {term}, heavy black ink shadows, deep chiaroscuro lighting, drained cold palette of slate blue and grey-green, 1950s pulp horror comic style, thick inked linework, moonlight through fog, aged newsprint texture, large areas of darkness, no text, no lettering"
+
+[platform]
+hashtags = ["#ghoststories", "#haunted", "#hauntedplaces", "#folklore", "#locallegend"]
+
+[monetization]
+primary = "affiliate"
+notes = "Ad rates here are entertainment-tier and the genre is crowded, so the return comes from retention, volume and reshares rather than from CPM, and from books, audio and merchandise alongside it."
+affiliate_categories = ["books and audiobooks", "streaming referrals", "merchandise"]

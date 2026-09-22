@@ -88,6 +88,14 @@ STAGE_NAMES: dict[str, str] = {
 MAX_ERROR_CHARS = 700
 MAX_FAILURES_SHOWN = 3
 
+# The pack that carries an arbitrary theme: it supplies the format, the voice
+# and the guardrails, while the theme typed in the chat supplies the subject.
+FREE_THEME_NICHE = "free-theme"
+# Short enough to be a typo, long enough to be a pasted article: neither is a
+# subject, and both waste twenty minutes of render.
+MIN_THEME_CHARS = 3
+MAX_THEME_CHARS = 200
+
 
 @dataclass(frozen=True)
 class _Check:
@@ -106,6 +114,8 @@ class RenderJob:
     niche_id: str
     count: int
     chat_id: int
+    # Free subject for this batch, empty when the pack decides the subject.
+    theme: str = ""
     tracker: ProgressTracker = field(default_factory=ProgressTracker)
     started_at: float = field(default_factory=time.monotonic)
     # When the chat last heard anything, so the heartbeat stays quiet while
@@ -229,15 +239,35 @@ class GrowthBot:
     # -- rendering ---------------------------------------------------------
 
     def _render(
-        self, niche_id: str, count: int, on_line: Callable[[str], None] | None = None
+        self,
+        niche_id: str,
+        count: int,
+        on_line: Callable[[str], None] | None = None,
+        theme: str = "",
     ) -> dict[str, Any]:
+        # The theme is read off the running job rather than handed to the
+        # runner. The runner is injectable and every stand-in for it declares
+        # exactly these three parameters, so an extra argument at that call
+        # would break each one; the job already carries the theme, and this
+        # runs on the same object that holds the job.
+        job = self._job
+        theme = theme or (job.theme if job else "")
         # Planning runs in this process, unlike the render, which is a fresh
         # subprocess. Without this the bot would keep calling the provider
         # configured when it started, however many times the file changed.
-        plan = create_plan(niche_id, count=count, app_config=load_app_config())
+        plan = create_plan(
+            niche_id,
+            count=count,
+            app_config=load_app_config(),
+            theme=theme or None,
+        )
         return produce(
             Path(plan["plan_file"]).parent, quiet=True, on_line=on_line
         )
+
+    def _theme_line(self, job: RenderJob) -> str:
+        """The subject line for a free-theme job, escaped: a person typed it."""
+        return f"\n🎯 tema: {html.escape(job.theme)}" if job.theme else ""
 
     def _progress_report(self, job: RenderJob) -> None:
         """Tell the chat where the render is, and reset the heartbeat clock.
@@ -325,13 +355,15 @@ class GrowthBot:
             self._say(
                 job.chat_id,
                 f"✅ <b>Prontinho!</b> {succeeded} de {total} vídeo(s) em "
-                f"{job.elapsed_minutes:.0f} min.\n📤 Mandando agora…",
+                f"{job.elapsed_minutes:.0f} min."
+                f"{self._theme_line(job)}\n📤 Mandando agora…",
             )
         else:
             self._say(
                 job.chat_id,
                 f"😕 Terminei em {job.elapsed_minutes:.0f} min e nenhum dos "
-                f"{total} vídeo(s) saiu.\n\n" + self._why_it_failed(result),
+                f"{total} vídeo(s) saiu.{self._theme_line(job)}\n\n"
+                + self._why_it_failed(result),
             )
         for record in result.get("records", []):
             if record.get("status") != "succeeded":
@@ -426,6 +458,7 @@ class GrowthBot:
         return (
             "👋 <b>Oi! Eu faço os vídeos pra você.</b>\n\n"
             "🎬 /run &lt;nicho&gt; [quantos] — começar um lote\n"
+            "🎯 /tema &lt;assunto&gt; — um vídeo sobre o tema que você quiser\n"
             "📊 /status — o que estou fazendo agora\n"
             "🩺 /doctor [nicho] — conferir se está tudo configurado\n"
             "🗂 /niches — os packs e quanto rendem\n"
@@ -449,6 +482,15 @@ class GrowthBot:
             )
         lines.append("\nPara usar: <code>/run &lt;nicho&gt;</code>")
         return "\n".join(lines)
+
+    def _busy_reply(self, job: RenderJob) -> str:
+        """The one-at-a-time refusal, worded once for every command that renders."""
+        return (
+            f"⏳ Calma aí! Já estou fazendo <code>{html.escape(job.niche_id)}</code> "
+            f"há {job.elapsed_minutes:.0f} min.{self._theme_line(job)}\n"
+            f"{job.tracker.snapshot().describe()}\n\n"
+            "Faço um de cada vez pra não travar a máquina 🙂"
+        )
 
     def _cmd_run(self, chat_id: int, args: list[str]) -> str:
         if not args:
@@ -475,13 +517,7 @@ class GrowthBot:
 
         with self._lock:
             if self._job is not None:
-                job = self._job
-                return (
-                    f"⏳ Calma aí! Já estou fazendo <code>{html.escape(job.niche_id)}</code> "
-                    f"há {job.elapsed_minutes:.0f} min.\n"
-                    f"{job.tracker.snapshot().describe()}\n\n"
-                    "Faço um de cada vez pra não travar a máquina 🙂"
-                )
+                return self._busy_reply(self._job)
             # One image per scene, and plan decides how many. Asking it keeps
             # the chat's denominator equal to the number really drawn.
             job = RenderJob(
@@ -503,6 +539,77 @@ class GrowthBot:
         threading.Thread(target=self._run_job, args=(job,), daemon=True).start()
         return ""
 
+    def _cmd_tema(self, chat_id: int, args: list[str]) -> str:
+        """Render one video about anything, with no pack written for it.
+
+        The packs pay for themselves, but a subject that occurs to someone on
+        a walk has no pack and is not worth writing one for. This borrows the
+        free-theme pack's format and guardrails and supplies the subject from
+        the chat.
+        """
+        if not args:
+            return (
+                "💡 Me diz o tema: <code>/tema &lt;assunto&gt;</code>\n"
+                "Exemplo: <code>/tema a história do café no Brasil</code> ☕"
+            )
+
+        theme = " ".join(args).strip()
+        if len(theme) < MIN_THEME_CHARS:
+            return (
+                f"✍️ Tema curto demais (mínimo {MIN_THEME_CHARS} letras).\n"
+                "Tenta algo como <code>/tema mistérios do fundo do mar</code> 🌊"
+            )
+        if len(theme) > MAX_THEME_CHARS:
+            return (
+                f"✂️ Tema longo demais: {len(theme)} caracteres, e o limite é "
+                f"{MAX_THEME_CHARS}.\nResume a ideia em uma frase 🙂"
+            )
+
+        # The pack ships with the repo, so a missing one means a server that
+        # is out of date. Saying that beats a traceback nobody can read.
+        try:
+            niche = load_niche(FREE_THEME_NICHE)
+        except NicheError:
+            return (
+                f"🧩 Não achei o pack <code>{FREE_THEME_NICHE}</code>, que é o que dá "
+                "formato aos temas livres.\n"
+                f"Ele precisa estar em <code>niches/{FREE_THEME_NICHE}.toml</code> "
+                "no servidor.\n"
+                "Enquanto isso dá pra usar <code>/run &lt;nicho&gt;</code> — a lista "
+                "está em /niches 🙂"
+            )
+
+        # Same preflight as /run: refuse in a second rather than promise
+        # twenty minutes and fail in five.
+        blocked = self._missing_config(niche)
+        if blocked:
+            return blocked
+
+        with self._lock:
+            if self._job is not None:
+                return self._busy_reply(self._job)
+            # One video per theme: the subject is the batch, and a second take
+            # on the same subject is a second /tema.
+            job = RenderJob(
+                niche_id=niche.id,
+                count=1,
+                chat_id=chat_id,
+                theme=theme,
+                tracker=ProgressTracker(scenes_total=scene_count(niche)),
+            )
+            self._job = job
+
+        # Acknowledged before the thread starts, as in /run. The theme is
+        # typed by a person, so it is escaped before it goes out as HTML.
+        self._say(
+            chat_id,
+            f"▶️ Fechado! Fazendo 1 vídeo sobre <b>{html.escape(theme)}</b> 🎬\n"
+            "⏱ Leva uns 20 min. Tema livre sai sempre 1 de cada vez.\n"
+            "Vou te avisando aqui a cada etapa — ou pergunte /status quando quiser 😉",
+        )
+        threading.Thread(target=self._run_job, args=(job,), daemon=True).start()
+        return ""
+
     def _cmd_status(self, _: int, __: list[str]) -> str:
         with self._lock:
             job = self._job
@@ -514,11 +621,12 @@ class GrowthBot:
         if job.delivering:
             return (
                 f"📤 <b>{html.escape(job.niche_id)}</b> — render pronto, "
-                f"enviando os vídeos agora.\n"
+                f"enviando os vídeos agora.{self._theme_line(job)}\n"
                 f"🕐 rodando há {job.elapsed_minutes:.0f} min"
             )
         return (
-            f"🎬 <b>{html.escape(job.niche_id)}</b> — {job.count} vídeo(s)\n"
+            f"🎬 <b>{html.escape(job.niche_id)}</b> — {job.count} vídeo(s)"
+            f"{self._theme_line(job)}\n"
             f"{job.tracker.snapshot().describe()}\n"
             f"🕐 rodando há {job.elapsed_minutes:.0f} min"
         )
@@ -635,6 +743,7 @@ class GrowthBot:
         "/help": "_cmd_start",
         "/niches": "_cmd_niches",
         "/run": "_cmd_run",
+        "/tema": "_cmd_tema",
         "/status": "_cmd_status",
         "/doctor": "_cmd_doctor",
         "/review": "_cmd_review",

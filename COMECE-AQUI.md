@@ -246,6 +246,77 @@ pack de UFO e ajuste o `prompt_template` — ele precisa conter `{term}`.
 app, não por tarefa. Rodar `--niche` de novo troca o estilo ativo, então rode
 um nicho ilustrado de cada vez.
 
+## Tema livre
+
+Para um assunto que nenhum pack cobre, dá para mandar o assunto direto, sem
+criar pack nenhum. Pelo Telegram:
+
+```
+/tema histórias de fantasma em hospitais abandonados
+/tema naufrágios que nunca foram explicados
+```
+
+Pelo terminal é o `--theme`, que funciona em `plan` e em `run`:
+
+```bash
+# Planejar e renderizar de uma vez
+python -m growth run free-theme --theme "histórias de fantasma" --count 1
+
+# Só a pauta, para ler antes de gastar um render
+python -m growth plan free-theme --theme "naufrágios sem explicação" --count 1
+```
+
+O pack `free-theme` é neutro de propósito: ele entrega o formato e os limites
+— como abrir, um assunto por roteiro, o que não dizer, ritmo e duração — e o
+tema entrega o assunto.
+
+**E é só isso que ele entrega: tema livre reaproveita o formato, não o
+julgamento editorial.** Esse é o ponto que decide a qualidade do que sai.
+Compare com o `ufo-sightings`: as regras dele são de documentário — nunca
+afirmar, sempre atribuir ("o piloto relatou", "o memorando dizia"), nunca
+inventar um caso. Essas regras estão certas para relatos documentados e
+erradas para folclore. Numa história de fantasma não existe arquivo para
+atribuir nem testemunha para citar: exigir fonte faz o roteiro inventar um
+caso que não existe, ou ficar sem graça. Ali o enquadramento honesto é outro
+— *isto é uma história que as pessoas contam* — e um pack neutro não sabe
+disso, porque ele não sabe do que você está falando.
+
+Três consequências práticas:
+
+- **Histórias de fantasma já têm pack.** Foi esse assunto que motivou o
+  `/tema`, e ele passou no teste: existe `ghost-stories` em `niches/`, escrito
+  para folclore. Para esse assunto use `python -m growth run ghost-stories`, e
+  não `/tema histórias de fantasma` — o tema livre já cumpriu o papel dele ali.
+- **Tema livre é um vídeo, não um lote.** Um lote existe para revezar ângulos
+  e encher uma semana de programação; um tema livre existe para você ouvir
+  como o assunto soa. E como as regras editoriais aqui são genéricas, um lote
+  só multiplica o que o enquadramento errou. Pelo Telegram isso é garantido: o
+  `/tema` não aceita quantidade, e pedir mais é mandar outro `/tema`. No
+  terminal o `run` continua aceitando `--count`, e o padrão dele é 3 — passe
+  `--count 1` até o resultado convencer.
+- **Cada tema guarda o próprio "já cobri isso".** O histórico é por tema, e
+  não só por nicho (`storage/growth/history/`). Pedir o mesmo tema duas vezes
+  dá assuntos novos, e um tema não deixa o outro parecendo repetitivo.
+
+### Quando o tema merece um pack
+
+Tema que você vai repetir merece pack próprio. É um arquivo TOML em `niches/`
+— não mexe em código. Copie `niches/ufo-sightings.toml`, que é o exemplo mais
+completo e justamente o de um assunto onde a regra editorial pesa mais que o
+formato.
+
+Dois campos carregam esse julgamento, e são os primeiros a reescrever:
+
+- **`[content].system_prompt`** — as regras duras do roteiro: como abrir, o
+  que nunca afirmar, o que atribuir e a quem, como terminar. É aqui que mora a
+  diferença entre "relato documentado" e "história que as pessoas contam".
+- **`[content].angles`** — os ângulos que revezam entre os vídeos, um por
+  vídeo. Sem eles, dez vídeos do mesmo nicho saem com a mesma forma, que é
+  exatamente o que as plataformas detectam.
+
+O resto (`[economics]`, `[video]`, `[images]`, `[platform]`, `[monetization]`)
+você ajusta depois, com o canal já andando.
+
 ## Por que não é só "gerar 10 vídeos por dia"
 
 Em julho de 2026 o YouTube passou a tratar conteúdo produzido em massa como
@@ -279,7 +350,8 @@ deploy/install-bot.sh
 ```
 
 Comandos: `/start` e `/help` (os dois mostram o menu), `/niches`,
-`/run <nicho> [n]`, `/status`, `/review [n]` (n entre 1 e 20), `/last [n]`.
+`/run <nicho> [n]`, `/tema <texto livre>` (um vídeo), `/status`,
+`/review [n]` (n entre 1 e 20), `/last [n]`.
 
 Quatro coisas de propósito:
 
