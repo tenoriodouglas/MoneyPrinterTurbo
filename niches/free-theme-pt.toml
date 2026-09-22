@@ -164,6 +164,19 @@ clip_duration = 5
 paragraph_number = 6
 bgm_volume = 0.18
 
+# calm for the same reason as the English free-theme pack: an arbitrary subject
+# needs a bed that commits to nothing. This is the one pt pack deliberately NOT
+# given a Brazilian instrumental colour - a national flavour is exactly what a
+# subject nobody vetted must not receive, since it would sound plainly wrong
+# under half the themes the operator might type in.
+[music]
+mood = "calm"
+prompt = "A neutral instrumental bed for a Brazilian channel whose subject is typed in fresh with each batch, so it must not colour any of them. Deliberately the same restrained palette as the English counterpart rather than a recognisably Brazilian one: soft felt piano, one warm sustained pad, a light muted pulse kept well back. No nylon-guitar figure, no bossa or samba inflection, no berimbau and no cuica - a national colour would flavour a subject nobody has vetted, and under an industrial accident or a court case that flavour would be plainly wrong. Harmony that resolves as neither major nor minor: attentive, never happy, sad, ominous or triumphant. Mid-slow, unchanging, no arc and no swell. It runs under continuous narration, so leave the 200 Hz to 4 kHz midrange empty and hold one flat dynamic. Fully instrumental, no vocals, no stingers, no risers."
+# Left empty on purpose: the AI path bills per video, so enabling it is the
+# owner's decision rather than a default. Set to "sonilo" or "elevenlabs" to use
+# the prompt above; until then the mood folder supplies the track.
+provider = ""
+
 [images]
 # Pollinations exposes an OpenAI-compatible image endpoint and its Flux model
 # is free, which is what makes an illustrated pack viable at zero cost.

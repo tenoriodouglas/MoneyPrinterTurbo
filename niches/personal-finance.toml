@@ -108,6 +108,23 @@ subtitle_animation = "pop_spring"
 clip_duration = 4
 paragraph_number = 5
 
+# Money and consequence, not a hype reel. This pack's credibility rests on not
+# overselling -- it bans "the power of compound interest is magic" -- so the bed
+# stays sober, and the mood is calm rather than upbeat: an optimistic track would
+# promise the return the script is careful never to promise.
+[music]
+mood = "calm"
+prompt = """
+Sparse instrumental underscore for a narrated personal-finance explainer. \
+Warm electric piano and muted upright bass over a soft, even pulse near 80 BPM, \
+brushed percussion low in the mix, no lead melody. Sober and considered: the \
+sound of arithmetic being worked through rather than a result being celebrated. \
+Hold one flat dynamic from first bar to last, with no build, no riser, no drop \
+and no triumphant resolution. Keep the arrangement thin and the midrange open so \
+it sits underneath a speaking voice without ever competing with the narration. \
+Instrumental only, no vocals, no lyrics, no vocal samples.
+"""
+
 [platform]
 hashtags = ["#personalfinance", "#moneytips", "#investing", "#financialliteracy", "#wealthbuilding"]
 

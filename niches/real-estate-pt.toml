@@ -151,6 +151,26 @@ custom_position = 62.0
 clip_duration = 4
 paragraph_number = 5
 
+# Same channel as real-estate for the Brazilian market: same mood, same weighted
+# identity. The guardrails push harder here -- the rules above forbid projecting
+# valorizacao or rental return, and "imovel nunca desvaloriza" is a banned phrase
+# -- so the bed carries no hopeful lift at all. English prompt for the same
+# reason as visual_terms: the music provider reads it, the narrator does not.
+# The palette turns acoustic for a Brazilian ear while staying rhythmically
+# neutral, since a groove would pull attention off a script about cost.
+[music]
+mood = "calm"
+prompt = """
+Measured instrumental bed for a narrated explainer about property costs in \
+Brazilian Portuguese. Warm sustained pads beneath soft nylon-string guitar \
+figures, slow and weighted near 70 BPM, spacious and unhurried, with a low still \
+bass and almost no percussion. Grounded and neutral in feeling: no rising motif, \
+no crescendo, no hopeful resolution, because the script may not suggest a \
+property will appreciate. Keep the texture thin and the midrange open so it sits \
+below the narration and never competes with the voice. Instrumental only, no \
+vocals, no lyrics, no vocal samples.
+"""
+
 [platform]
 hashtags = ["#imoveis", "#primeiroimovel", "#financiamentoimobiliario", "#mercadoimobiliario", "#educacaofinanceira"]
 

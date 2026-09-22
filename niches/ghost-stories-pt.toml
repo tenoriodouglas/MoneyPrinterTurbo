@@ -171,6 +171,19 @@ paragraph_number = 6
 # elsewhere while staying well under the narration.
 bgm_volume = 0.2
 
+# Same dark folder as the English ghost-stories pack - one channel, two markets,
+# and the dread is the same dread. This is the one pack where the instrumental
+# palette genuinely should differ: the music box and the parlour reverb are
+# Anglo haunted-house signifiers, while a causo is told on a veranda in the
+# interior. The register and the no-jump-scare rule carry over unchanged.
+[music]
+mood = "dark"
+prompt = "Instrumental atmosphere for a Brazilian channel of causos, assombração and interior folklore. Hold the same dread and the same patience as the English counterpart, but in the palette of the Brazilian countryside at night rather than the Victorian parlour: a solo nylon-string guitar played slowly and very sparsely, with long gaps between notes, viola caipira harmonics left ringing, a low bowed string drone underneath, wind moving through a wooden veranda, and the steady wall of cicadas and night insects that is what the interior after dark actually sounds like. Almost pulseless, melancholy, unhurried. No jump scare in the music any more than in the script: no stingers, no impacts, no risers, no sudden hits. It sits under a slow read, so keep the 200 Hz to 4 kHz midrange clear and hold one flat low dynamic throughout. Fully instrumental, no vocals, no whispers."
+# Left empty on purpose: the AI path bills per video, so enabling it is the
+# owner's decision rather than a default. Set to "sonilo" or "elevenlabs" to use
+# the prompt above; until then the mood folder supplies the track.
+provider = ""
+
 [images]
 # Pollinations exposes an OpenAI-compatible image endpoint and its Flux model
 # is free, which is what makes an illustrated pack viable at zero cost.

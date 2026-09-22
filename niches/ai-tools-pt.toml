@@ -142,6 +142,24 @@ custom_position = 62.0
 clip_duration = 4
 paragraph_number = 5
 
+# Same channel as ai-tools in the Brazilian market, same mood, same identity.
+# Nothing in this pack's guardrails pulls the palette local: tool-and-workflow
+# content reads as international to a Brazilian viewer too, so the texture stays
+# electronic and only the writing is fresh. English prompt for the same reason as
+# visual_terms above -- the music provider reads it, the narrator does not.
+[music]
+mood = "upbeat"
+prompt = """
+Clean instrumental underscore for a narrated software-workflow walkthrough in \
+Brazilian Portuguese. Gentle synth arpeggio over a muted electronic pulse near \
+100 BPM, evenly spaced and unhurried, with a simple sustained bass and light \
+percussive ticks. Curious and demonstrative rather than excited: steady forward \
+motion, no risers, no drops, no build toward a payoff, nothing that sounds like \
+an announcement. Keep the texture thin and the midrange clear so the bed sits \
+under the narration and never competes with the voice. Instrumental only, no \
+vocals, no lyrics, no vocal samples.
+"""
+
 [platform]
 hashtags = ["#ferramentasdeia", "#inteligenciaartificial", "#produtividade", "#automacao", "#tecnologia"]
 

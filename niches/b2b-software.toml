@@ -103,6 +103,23 @@ custom_position = 62.0
 clip_duration = 4
 paragraph_number = 5
 
+# Practical and demonstrative like ai-tools, so it shares that mood, but the
+# voice here is operator to operator and deliberately unglamorous. The prompt
+# pulls the same shelf plainer and drier -- no sparkle, no sheen -- so the two
+# tech channels do not arrive sounding like one another.
+[music]
+mood = "upbeat"
+prompt = """
+Understated instrumental bed for a narrated explainer about running a small \
+company and buying software for it. Muted electric piano and a soft, dry drum \
+pulse near 95 BPM with a plain bass line and no ornament or sheen. Workmanlike \
+forward motion: it should sound like a process being run properly, not like a \
+pitch being made. No build, no riser, no drop, no uplifting turn, no moment of \
+arrival. Keep the arrangement sparse and the midrange uncluttered so it stays \
+underneath a narrator's voice and does not compete with it. Instrumental only, \
+no vocals, no lyrics, no vocal samples.
+"""
+
 [platform]
 hashtags = ["#smallbusiness", "#operations", "#saas", "#businesstips", "#founders"]
 

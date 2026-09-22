@@ -105,6 +105,23 @@ custom_position = 62.0
 clip_duration = 4
 paragraph_number = 5
 
+# Practical and demonstrative: the script walks through a workflow, so the bed
+# should feel like steady progress through steps. Upbeat is the right shelf for
+# that -- light forward motion, no hype -- and the prompt holds it there by ruling
+# out the riser-and-drop shape that would turn a walkthrough into a trailer.
+[music]
+mood = "upbeat"
+prompt = """
+Clean instrumental underscore for a narrated walkthrough of a software workflow. \
+Soft synth arpeggio over a muted electronic pulse near 100 BPM, evenly spaced and \
+precise, with light percussive ticks and one simple sustained bass note holding \
+the floor. Forward motion without urgency: it should feel like steady progress \
+through a set of steps, never like a countdown or a product launch. No risers, no \
+drops, no cinematic build, no payoff moment. Keep it airy and thin through the \
+midrange so it stays under a speaking voice and does not compete with the \
+narration. Instrumental only, no vocals, no lyrics, no vocal samples.
+"""
+
 [platform]
 hashtags = ["#aitools", "#automation", "#productivity", "#techtips", "#workflow"]
 

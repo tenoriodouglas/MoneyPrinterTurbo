@@ -115,8 +115,10 @@ parser aplica hoje:
 - **Declarar `mood` e `prompt` juntos é útil**, e o código diz isso: o `mood` é
   o fallback de quando o provedor não está configurado.
 
-Nenhum pack em `niches/` declara `[music]` ainda — o formato existe, a adoção é
-o próximo passo. A tabela acima é a proposta de mapeamento para essa adoção.
+A adoção nos packs está em andamento (`ghost-stories` → `dark` e
+`ufo-sightings` → `mystery` já declaram a seção). A tabela acima é o mapeamento
+completo; se algum pack ainda não tiver `[music]`, ele simplesmente continua no
+acervo genérico até ganhar a seção.
 
 Há também um helper `mood_tracks("calm")` em `growth/niche.py` que devolve a
 lista de faixas de uma pasta. Serve para conferir rapidamente o que o motor

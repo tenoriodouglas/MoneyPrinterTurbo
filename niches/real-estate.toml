@@ -102,6 +102,24 @@ custom_position = 62.0
 clip_duration = 4
 paragraph_number = 5
 
+# The other money-and-consequence pack, and it shares personal-finance's mood for
+# the same reason: the script separates price from carrying cost and refuses to
+# call a property a good investment, so the bed must not sound like good news.
+# Where the finance bed is arithmetic, this one is structural -- slower, heavier,
+# built from sustained tone rather than pulse -- so the two stay distinct.
+[music]
+mood = "calm"
+prompt = """
+Measured instrumental bed for a narrated explainer about property costs. \
+Sustained warm strings and low piano over a slow, weighted pulse near 70 BPM, \
+wide and unhurried, the sound of something structural and permanent rather than \
+something exciting. Steady and even from start to finish: no rising motif, no \
+crescendo, no cinematic swell and no resolution that reads as good news, because \
+the script never promises a property will gain value. Keep the arrangement sparse \
+and leave the midrange clear so the bed stays under a narrator's voice and does \
+not compete with it. Instrumental only, no vocals, no lyrics, no vocal samples.
+"""
+
 [platform]
 hashtags = ["#realestate", "#homebuying", "#propertyinvesting", "#firsttimehomebuyer", "#landlord"]
 

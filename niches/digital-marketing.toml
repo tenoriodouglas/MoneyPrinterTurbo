@@ -105,6 +105,26 @@ custom_position = 62.0
 clip_duration = 4
 paragraph_number = 5
 
+# The pack most at risk of sounding like the content it refuses to be. Its
+# banned_phrases are the hustle lexicon -- "six figures", "passive income",
+# "crushing it", "hustle harder", "scale to the moon" -- and an upbeat bed is
+# that genre's production signature, so this channel takes the calm shelf and the
+# prompt names the specific sounds to avoid. The script describes mechanics and
+# never outcomes; the music has to keep the same promise.
+[music]
+mood = "calm"
+prompt = """
+Dry, understated instrumental groove for a narrated explainer about pricing work \
+and finding clients. Warm muted guitar and soft electric piano over a relaxed, \
+low-key beat near 90 BPM with a rounded bass line. It must not sound like \
+get-rich or hustle content: no trap hi-hat rolls, no risers, no drops, no \
+triumphant brass, no motivational piano swell, nothing that suggests money \
+arriving or a result being announced. Level and matter-of-fact from start to \
+finish, the sound of craft rather than success. Keep the midrange open and the \
+arrangement thin so it stays under a speaking voice without competing with the \
+narration. Instrumental only, no vocals, no lyrics, no vocal samples.
+"""
+
 [platform]
 hashtags = ["#freelancing", "#marketing", "#clientacquisition", "#solopreneur", "#agency"]
 

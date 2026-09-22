@@ -156,6 +156,19 @@ paragraph_number = 6
 # elsewhere while staying well under the narration.
 bgm_volume = 0.2
 
+# dark is the one folder where the bed does real dramatic work rather than
+# filling silence, which is why this pack alone carries bgm_volume 0.2. The
+# register is folklore dread: slow, patient and unresolved. It also has to obey
+# the rule the scripts obey - the story never ends on a jump scare, so neither
+# can the music.
+[music]
+mood = "dark"
+prompt = "Instrumental atmosphere for a channel of ghost stories, hauntings and local legend. Very slow and close to pulseless: a low cello drone, bowed metal and singing bowls, a detuned music box heard through a wall, a single distant piano note left to decay in a large room, settling wood and faint room tone. Dread built out of patience rather than volume - unease and melancholy, the long quiet before anything is wrong. The scripts are forbidden a jump scare and so is this music: no stingers, no impacts, no risers, no sudden hits, nothing that implies a cut the video does not have. It sits under an unhurried read, so keep the 200 Hz to 4 kHz midrange clear and hold one steady low dynamic from start to finish. Fully instrumental. No vocals, no choir, no whispers, no breath."
+# Left empty on purpose: the AI path bills per video, so enabling it is the
+# owner's decision rather than a default. Set to "sonilo" or "elevenlabs" to use
+# the prompt above; until then the mood folder supplies the track.
+provider = ""
+
 [images]
 # Pollinations exposes an OpenAI-compatible image endpoint and its Flux model
 # is free, which is what makes an illustrated pack viable at zero cost.

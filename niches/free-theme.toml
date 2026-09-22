@@ -150,6 +150,19 @@ clip_duration = 5
 paragraph_number = 6
 bgm_volume = 0.18
 
+# calm, rather than a mood matched to the subject: the theme is typed in at run
+# time and can be anything, so the bed's job is to stay out of the way and
+# commit to no verdict. Neutrality is not a fallback here, it is the design -
+# a swell in the wrong place would celebrate a disaster. The operator can still
+# point a batch at another mood by hand once the day's theme is known.
+[music]
+mood = "calm"
+prompt = "A neutral instrumental bed for a channel whose subject is supplied fresh with each batch, so it must not colour any of them. Soft felt piano, one warm sustained pad, a light muted pulse kept well back in the mix. No string section, no brass, no choir, and no percussion distinctive enough to mark a genre. Harmony that settles as neither major nor minor, so the music reads as attentive rather than happy, sad, ominous or triumphant: it cannot pass judgement on a story it has not been told. Mid-slow, unchanging, with no arc and no arrival, because a swell in the wrong place would celebrate a disaster or mourn a success. It runs under continuous narration throughout, so leave the 200 Hz to 4 kHz midrange empty and hold one flat dynamic. Fully instrumental, no vocals, no stingers, no risers."
+# Left empty on purpose: the AI path bills per video, so enabling it is the
+# owner's decision rather than a default. Set to "sonilo" or "elevenlabs" to use
+# the prompt above; until then the mood folder supplies the track.
+provider = ""
+
 [images]
 # Pollinations exposes an OpenAI-compatible image endpoint and its Flux model
 # is free, which is what makes an illustrated pack viable at zero cost.

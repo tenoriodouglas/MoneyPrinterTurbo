@@ -149,6 +149,29 @@ subtitle_animation = "pop_spring"
 clip_duration = 4
 paragraph_number = 5
 
+# Same channel as personal-finance, so the same mood and the same musical
+# identity: what changes is the market, not the subject. Calm matters even more
+# here -- the CVM guardrails above forbid promising or projecting any return, so
+# a bed that sounded like gains arriving would say what the script may not. The
+# prompt is English because the music provider reads it and the narrator does
+# not, exactly like visual_terms. The palette turns acoustic for a Brazilian ear
+# but stays rhythmically plain: a bossa or samba groove would read as leisure
+# under a script about money.
+[music]
+mood = "calm"
+prompt = """
+Sparse instrumental underscore for a narrated personal-finance explainer in \
+Brazilian Portuguese. Nylon-string acoustic guitar and soft upright bass over a \
+gentle, even pulse near 80 BPM, warm rather than bright, brushed percussion kept \
+quiet, no lead melody. Harmonically rich but rhythmically plain, with no bossa \
+or samba groove and nothing that suggests leisure. Measured and unhurried, the \
+sound of a calculation being explained rather than a gain being announced. One \
+flat dynamic throughout: no build, no riser, no swell, no triumphant close. Thin \
+arrangement with an open midrange so it stays underneath the narration and never \
+competes with the voice. Instrumental only, no vocals, no lyrics, no vocal \
+samples.
+"""
+
 [platform]
 hashtags = ["#financaspessoais", "#educacaofinanceira", "#investimentos", "#rendafixa", "#dinheiro"]
 

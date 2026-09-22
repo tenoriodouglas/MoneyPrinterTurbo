@@ -155,6 +155,19 @@ clip_duration = 5
 paragraph_number = 6
 bgm_volume = 0.18
 
+# Same mood as the English ufo-sightings pack: the two are one channel serving
+# two markets, and what changes is the narration language, not the climate of
+# the subject. mystery for the same reason it was chosen there - these are case
+# files, not ghost stories. The palette below is deliberately the English one
+# with a darker, more humid cast, not a Brazilian substitution.
+[music]
+mood = "mystery"
+prompt = "Instrumental documentary underscore for a Brazilian channel about documented UFO sighting reports. Hold the same cold investigative register as the English counterpart: low analogue synthesiser drone, a slow radar-sweep pulse, isolated muted piano notes, bowed double bass, faint tape hiss. Pitch it slightly darker and heavier in the low end, with the still, humid air of a night that will not cool, because these cases sit on Amazon rivers, unpaved roads and small towns after midnight rather than in a desert. Around 70 BPM, no drum kit, no resolving melody, and nothing tropical, percussive or celebratory - a national colour here would read as travelogue and undo the sobriety the scripts work for. It runs under continuous narration, so leave the 200 Hz to 4 kHz midrange open and hold one flat dynamic throughout. Fully instrumental, no vocals, no risers, no impacts."
+# Left empty on purpose: the AI path bills per video, so enabling it is the
+# owner's decision rather than a default. Set to "sonilo" or "elevenlabs" to use
+# the prompt above; until then the mood folder supplies the track.
+provider = ""
+
 [images]
 # Pollinations exposes an OpenAI-compatible image endpoint and its Flux model
 # is free, which is what makes an illustrated pack viable at zero cost.

@@ -148,6 +148,25 @@ custom_position = 62.0
 clip_duration = 4
 paragraph_number = 5
 
+# Same channel as b2b-software for the Brazilian market: same mood, same plain
+# operator register. The palette stays international for the same reason as the
+# ai-tools pair -- process and software content does not read as local -- and the
+# prompt is English like visual_terms, because the music provider reads it and
+# the narrator does not. This pack's own rule against imported corporate jargon
+# is why the bed is kept dry rather than polished.
+[music]
+mood = "upbeat"
+prompt = """
+Understated instrumental bed for a narrated explainer about running a small \
+company in Brazilian Portuguese. Dry muted keys and a soft, plain drum pulse \
+near 95 BPM with a simple bass line, unhurried and free of ornament. Practical \
+and even-tempered, the sound of an operator working through a process rather \
+than selling one: no build, no lift, no motivational turn, no moment of arrival. \
+Keep it sparse with an open midrange so the bed stays the quietest layer and the \
+narration sits clearly on top. Instrumental only, no vocals, no lyrics, no vocal \
+samples.
+"""
+
 [platform]
 hashtags = ["#pequenaempresa", "#gestao", "#mei", "#processos", "#empreendedorismo"]
 
