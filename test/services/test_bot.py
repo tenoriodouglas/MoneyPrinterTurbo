@@ -3,6 +3,7 @@ import tempfile
 import threading
 import time
 import unittest
+import unittest.mock
 from pathlib import Path
 from unittest.mock import patch
 
@@ -253,6 +254,67 @@ class TestUploadLimit(unittest.TestCase):
                     client.send_video(OWNER, big)
         self.assertIn("over the", sent[0])
         self.assertIn("big.mp4", sent[0])
+
+
+class TestTelegramClient(unittest.TestCase):
+    """The fake client in the other tests stands in for this one, so nothing
+    here was exercised until a real poll crashed on the first call."""
+
+    def _response(self, payload):
+        response = unittest.mock.MagicMock()
+        response.json.return_value = payload
+        return response
+
+    def test_get_updates_sends_the_long_poll_window_as_a_parameter(self):
+        client = bot_module.TelegramClient("token")
+        with patch("growth.bot.requests.post") as post:
+            post.return_value = self._response({"ok": True, "result": []})
+            client.get_updates(offset=7)
+        kwargs = post.call_args.kwargs
+        # The api parameter and the http deadline are different things: the
+        # request has to outlast the poll it is asking Telegram to hold open.
+        self.assertEqual(kwargs["data"]["timeout"], bot_module.POLL_TIMEOUT)
+        self.assertEqual(kwargs["data"]["offset"], 7)
+        self.assertGreater(kwargs["timeout"], bot_module.POLL_TIMEOUT)
+
+    def test_get_updates_omits_the_offset_on_the_first_poll(self):
+        client = bot_module.TelegramClient("token")
+        with patch("growth.bot.requests.post") as post:
+            post.return_value = self._response({"ok": True, "result": []})
+            client.get_updates(offset=None)
+        self.assertNotIn("offset", post.call_args.kwargs["data"])
+
+    def test_a_non_list_result_does_not_reach_the_caller(self):
+        client = bot_module.TelegramClient("token")
+        with patch("growth.bot.requests.post") as post:
+            post.return_value = self._response({"ok": True, "result": {}})
+            self.assertEqual(client.get_updates(None), [])
+
+    def test_an_api_error_names_the_method_and_hides_the_token(self):
+        client = bot_module.TelegramClient("secret-token")
+        with patch("growth.bot.requests.post") as post:
+            post.return_value = self._response(
+                {"ok": False, "description": "Unauthorized"}
+            )
+            with self.assertRaises(BotError) as context:
+                client.get_me()
+        message = str(context.exception)
+        self.assertIn("getMe", message)
+        self.assertIn("Unauthorized", message)
+        self.assertNotIn("secret-token", message)
+
+    def test_send_message_posts_the_text_to_the_chat(self):
+        client = bot_module.TelegramClient("token")
+        with patch("growth.bot.requests.post") as post:
+            post.return_value = self._response({"ok": True, "result": {}})
+            client.send_message(OWNER, "hello")
+        data = post.call_args.kwargs["data"]
+        self.assertEqual(data["chat_id"], OWNER)
+        self.assertEqual(data["text"], "hello")
+
+    def test_an_empty_token_is_refused_at_construction(self):
+        with self.assertRaises(BotError):
+            bot_module.TelegramClient("   ")
 
 
 class TestSettings(unittest.TestCase):

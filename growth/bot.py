@@ -66,8 +66,18 @@ class TelegramClient:
             raise BotError("the telegram bot token is empty")
         self._base = f"{API_ROOT}/bot{token.strip()}"
 
-    def _call(self, method: str, timeout: int = 30, **payload: Any) -> dict[str, Any]:
-        response = requests.post(f"{self._base}/{method}", data=payload, timeout=timeout)
+    def _call(
+        self, method: str, *, http_timeout: int = 30, **payload: Any
+    ) -> dict[str, Any]:
+        """Call one Bot API method.
+
+        The HTTP timeout is named apart from the payload because getUpdates
+        takes a Telegram parameter also called ``timeout``: sharing the name
+        made the two collide as soon as the first poll ran.
+        """
+        response = requests.post(
+            f"{self._base}/{method}", data=payload, timeout=http_timeout
+        )
         body = response.json()
         if not body.get("ok"):
             # The description names the cause; the token must never be echoed.
@@ -81,7 +91,10 @@ class TelegramClient:
         payload: dict[str, Any] = {"timeout": POLL_TIMEOUT}
         if offset is not None:
             payload["offset"] = offset
-        result = self._call("getUpdates", timeout=POLL_TIMEOUT + 15, **payload)
+        # Wait longer than the long poll itself, or every poll would time out.
+        result = self._call(
+            "getUpdates", http_timeout=POLL_TIMEOUT + 15, **payload
+        )
         return result if isinstance(result, list) else []
 
     def send_message(self, chat_id: int, text: str) -> None:
