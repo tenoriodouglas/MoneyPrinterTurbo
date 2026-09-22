@@ -246,6 +246,84 @@ pack de UFO e ajuste o `prompt_template` — ele precisa conter `{term}`.
 app, não por tarefa. Rodar `--niche` de novo troca o estilo ativo, então rode
 um nicho ilustrado de cada vez.
 
+## A trilha sonora
+
+Todo vídeo sempre sorteou uma música de fundo de `resource/songs/`, e o sorteio
+funciona: em 200 amostras, os 29 arquivos apareceram. O defeito não estava no
+sorteio — estava no que ele sorteia.
+
+As 29 faixas foram medidas uma a uma. **Quase todas têm exatamente 180,000
+segundos** (só uma destoa, com 134) **e todas cabem numa faixa de menos de 5 dB
+de volume percebido**, de -19,7 a -24,4 LUFS. Duração idêntica ao milissegundo e
+loudness quase igual não acontecem por acaso entre faixas de origens diferentes:
+são 29 renders da mesma ideia, saídos do mesmo gerador. Por isso o arquivo mudava
+a cada vídeo e o som não mudava — coisa que se percebe ouvindo o canal, não lendo
+o código.
+
+Agora cada pack traz uma seção `[music]`:
+
+- **`mood`** — o nome de uma subpasta de `resource/songs/` com as faixas que
+  combinam com aquele canal. São quatro: `calm/`, `upbeat/`, `dark/` e
+  `mystery/`. Com a pasta cheia, cada vídeo sorteia do acervo daquele canal, e
+  vídeos seguidos de um mesmo lote pegam faixas diferentes.
+- **`prompt`** — a descrição da música para um provedor de IA, que só é usada se
+  você ligar o `provider` (mais abaixo).
+
+**As quatro pastas nascem vazias, e enquanto estiverem vazias nada muda.** O pack
+cai de volta no acervo genérico dos 29 arquivos: nada quebra, e nada melhora
+também. Quais ainda estão vazias, o `doctor` diz:
+
+```bash
+python -m growth doctor
+# [ warn ] music  ai-tools: mood 'upbeat' has no tracks, so it renders with the
+#                 generic songs
+#                 -> put audio (.mp3, .wav, ...) in resource/songs/upbeat
+```
+
+Onde conseguir música legalmente, que duração o motor precisa e o que evitar numa
+faixa está em **`resource/songs/README.md`**.
+
+### Licença e monetização não são a mesma pergunta
+
+Uma faixa pode estar perfeitamente licenciada — CC0, comprada, "royalty free" — e
+ainda assim ser reivindicada pelo **Content ID** do YouTube. São dois sistemas que
+não conversam: a licença diz que você pode usar; o Content ID compara formas de
+onda com o que alguém registrou, e não lê licença nenhuma. O caso comum é banal —
+o artista publicou sob CC BY e depois distribuiu o próprio catálogo por uma
+distribuidora que registrou tudo.
+
+A reivindicação não derruba o vídeo: ela **manda a receita de anúncio dele para
+quem reivindicou**. Dá para contestar, e com a licença guardada você costuma
+ganhar, mas isso leva dias ou semanas — e é nos primeiros dias que um vídeo curto
+faz quase toda a audiência dele. Ganhar depois da janela é perder do mesmo jeito.
+
+Pelo ranking do `docs/MONETIZACAO.md` isso custa menos aqui do que assusta:
+anúncio é o 4º e o 5º lugar da lista, e o dinheiro está em serviço, afiliado e
+lead — nenhum deles afetado por Content ID. **Mas isso é motivo para não se
+desesperar, não para pular a checagem.** Uma faixa numa pasta de humor não é usada
+em um vídeo: é usada em todos os vídeos que a sortearem daí em diante, e um erro
+ali se multiplica sozinho. Conferir custa uma vez por faixa — sobe um vídeo não
+listado e olha a coluna "Restrições" no Studio, como explica a seção 4 do
+`resource/songs/README.md`.
+
+### A alternativa paga
+
+`provider` vem **em branco de propósito** em todos os packs. Preenchido com
+`sonilo` ou `elevenlabs`, o motor para de sortear e passa a **gerar uma trilha
+original por vídeo** a partir do `prompt`: música diferente em cada vídeo, feita
+para o tema, e sem o problema de Content ID, já que aquele áudio não existia antes
+de o vídeo ser feito.
+
+Custa por vídeo — é uma chamada de API a cada geração — e é por isso que vem em
+branco: essa é uma decisão de quem paga a conta, não um padrão de repositório.
+**Quanto custa não está escrito em lugar nenhum deste repositório**, então confira
+na tabela do provedor antes de ligar, lembrando que é uma geração por vídeo e que
+um canal diário multiplica isso por 30 no mês. No ElevenLabs há um detalhe a mais:
+a chave sozinha não basta, o plano da conta precisa incluir a API de música.
+
+Se o provedor falhar no meio, o vídeo sai assim mesmo, com o aviso no log — não é
+ponto único de falha.
+
 ## Tema livre
 
 Para um assunto que nenhum pack cobre, dá para mandar o assunto direto, sem

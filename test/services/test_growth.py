@@ -996,3 +996,566 @@ class TestBannedPhrasesReachTheScript(unittest.TestCase):
         self.assertLessEqual(len(prompt), MAX_SCRIPT_PROMPT)
         self.assertIn("Editorial angle", prompt)
         self.assertIn("a hook", prompt)
+
+
+def _music_prompt_limit() -> int:
+    """The ceiling the engine puts on the field that carries a music prompt.
+
+    Read off VideoParams rather than retyped: a number copied into this file
+    would agree with itself while the engine rejected the batch.
+    """
+    for constraint in VideoParams.model_fields["video_music_prompt"].metadata:
+        limit = getattr(constraint, "max_length", None)
+        if limit:
+            return int(limit)
+    raise AssertionError("VideoParams.video_music_prompt has no max_length")
+
+
+def _engine_music_providers() -> set[str]:
+    """Provider names the engine can really generate music with."""
+    # Imported here because the imports at the top of this file are fixed.
+    from app.services.task import _VIDEO_MUSIC_PROVIDERS
+
+    return set(_VIDEO_MUSIC_PROVIDERS)
+
+
+def _resolve_bgm_file(value: str) -> str:
+    """The engine's own resolver for a task's bgm_file. Raises ValueError."""
+    from app.services.bgm import resolve_bgm_file
+
+    return resolve_bgm_file(value)
+
+
+def _check_batch_entry(entry: dict, index: int = 1) -> None:
+    """Put one entry through the checks cli.py makes before a batch starts.
+
+    They run over the whole manifest first, so one bad entry fails every video
+    in the batch rather than its own.
+    """
+    cli._validate_batch_entry_fields(
+        entry, index=index, allowed_fields=set(VideoParams.model_fields)
+    )
+    cli._validate_batch_task_params(
+        VideoParams(**entry),
+        stop_at="video",
+        custom_position_is_explicit="custom_position" in entry,
+        wavespeed_charge_confirmed=False,
+        seedance_charge_confirmed=False,
+        ofox_charge_confirmed=False,
+        metaso_minimax_charge_confirmed=False,
+        muapi_charge_confirmed=False,
+    )
+
+
+def _mood_folder(test: unittest.TestCase, *tracks: str) -> Path:
+    """A throwaway mood folder under resource/songs, holding `tracks`.
+
+    Real files, because everything below turns on what is on disk. Removal is
+    registered with the test, so a failing assertion still leaves the repo as
+    it was found. The pack's mood is the returned folder's name.
+    """
+    import shutil
+
+    from growth.niche import MUSIC_DIR
+
+    MUSIC_DIR.mkdir(parents=True, exist_ok=True)
+    folder = Path(tempfile.mkdtemp(prefix="test-mood-", dir=MUSIC_DIR))
+    test.addCleanup(shutil.rmtree, folder, ignore_errors=True)
+    for name in tracks:
+        (folder / name).write_bytes(b"placeholder, never decoded by these tests")
+    return folder
+
+
+def _music_briefs(niche, count: int):
+    """A batch of briefs as the planner builds them, positions included."""
+    return plan_module.parse_briefs(_briefs_json(count), niche, count)
+
+
+class TestMoodIsNotAPath(unittest.TestCase):
+    """[music].mood is joined to resource/songs and then to a filename, so a
+    pack - a data file, hand-edited and copied between installs - decides
+    where the render engine looks on disk."""
+
+    def test_a_mood_that_is_not_one_plain_folder_name_is_rejected(self):
+        """Each of these either leaves resource/songs or names something the
+        folder listing was never meant to reach."""
+        hostile = [
+            "../../etc",
+            "..",
+            "moods/../../etc",
+            "calm/../../..",
+            "/etc",
+            "moods/calm",
+            "moods\\calm",
+            ".hidden",
+            ".",
+            "calm\x00.mp3",
+            "calm\nnoise",
+            "calm\x7f",
+            "calm mood",
+        ]
+        for mood in hostile:
+            with self.subTest(mood=mood):
+                with self.assertRaises(NicheError):
+                    parse_niche(_pack(music={"mood": mood}))
+
+    def test_an_ordinary_mood_name_is_still_accepted(self):
+        """The rejections above prove nothing if the rule also refuses the
+        names a pack would really use."""
+        for mood in ("cinematic", "lo-fi", "dark_ambient", "suspense2", "calm.v2"):
+            with self.subTest(mood=mood):
+                self.assertEqual(parse_niche(_pack(music={"mood": mood})).music.mood, mood)
+
+    def test_padding_is_trimmed_rather_than_carried_into_the_path(self):
+        """A mood pasted from a chat or a spreadsheet arrives padded. A kept
+        "calm\\n" is a second folder that looks identical in every listing and
+        that no one can create - and it is why the name check is anchored at
+        both ends rather than ending in "$"."""
+        self.assertEqual(parse_niche(_pack(music={"mood": " calm\n"})).music.mood, "calm")
+
+    def test_the_track_listing_repeats_the_check_instead_of_trusting_it(self):
+        """mood_tracks is public and is the call that turns a mood into a
+        path. "." would hand back every built-in song as if it were one
+        pack's folder, which is the sound these folders exist to stop."""
+        from growth.niche import mood_tracks
+
+        for mood in (".", "..", "../songs", "/etc", ".ssh"):
+            with self.subTest(mood=mood):
+                self.assertEqual(mood_tracks(mood), [])
+
+
+class TestMoodTracksReachTheEngine(unittest.TestCase):
+    """bgm_file is a path a render opens. app/services/bgm.py resolve_bgm_file
+    is the only thing between a pack and an arbitrary file, so what the
+    manifest names must satisfy it - and nothing else may."""
+
+    def test_the_pack_music_directory_is_the_one_the_engine_resolves_against(self):
+        """Mood folders anywhere else would look fine at plan time and be
+        refused at render time, on every video of the batch."""
+        from app.utils import utils
+        from growth.niche import MUSIC_DIR
+
+        self.assertEqual(MUSIC_DIR.resolve(), Path(utils.song_dir()).resolve())
+
+    def test_a_planned_track_resolves_inside_the_songs_directory(self):
+        folder = _mood_folder(self, "one.mp3", "two.mp3")
+        niche = parse_niche(_pack(music={"mood": folder.name}))
+        for brief in _music_briefs(niche, 4):
+            with self.subTest(brief.subject):
+                entry = plan_module.to_manifest_entry(brief, niche, seed=4)
+                resolved = Path(_resolve_bgm_file(entry["bgm_file"]))
+                self.assertEqual(resolved.parent.name, folder.name)
+                self.assertTrue(resolved.is_file())
+
+    def test_a_planned_track_survives_the_batch_validators(self):
+        """cli.py cross-checks the bgm fields before any task starts: a file
+        named without bgm_type=custom, or a prompt without a provider, is
+        rejected as a manifest, so one pack's music fails the whole batch."""
+        folder = _mood_folder(self, "one.mp3", "two.mp3")
+        niche = parse_niche(_pack(music={"mood": folder.name}))
+        for index, brief in enumerate(_music_briefs(niche, 3), start=1):
+            with self.subTest(brief.subject):
+                entry = plan_module.to_manifest_entry(brief, niche, seed=4)
+                _check_batch_entry(entry, index=index)
+
+    def test_a_crafted_bgm_file_is_refused(self):
+        """The belt to the mood check's braces. However a path reaches the
+        field - a pack the check missed, a hand-edited manifest - this is
+        what decides which files a render may open."""
+        folder = _mood_folder(self, "one.mp3", "sleeve.jpg")
+        with tempfile.TemporaryDirectory() as outside:
+            intruder = Path(outside) / "intruder.mp3"
+            intruder.write_bytes(b"placeholder")
+            # A track that is a symlink out of the tree: the resolver compares
+            # real paths, so the link is followed before it is judged.
+            (folder / "linked.mp3").symlink_to(intruder)
+            crafted = [
+                str(intruder),
+                f"{folder.name}/linked.mp3",
+                f"{folder.name}/../../../etc/passwd.mp3",
+                "../config.toml",
+                f"{folder.name}/sleeve.jpg",
+                f"{folder.name}",
+                "",
+            ]
+            for value in crafted:
+                with self.subTest(value=value):
+                    with self.assertRaises(ValueError):
+                        _resolve_bgm_file(value)
+
+    def test_only_playable_tracks_are_offered_to_a_pack(self):
+        """A mood folder is a folder people drop files into. A cover image or
+        a README chosen as a track fails at the render, after the script has
+        been written and paid for."""
+        from growth.niche import mood_tracks
+
+        folder = _mood_folder(
+            self, "one.mp3", "two.wav", "cover.jpg", "README.md", ".DS_Store"
+        )
+        self.assertEqual(mood_tracks(folder.name), ["one.mp3", "two.wav"])
+        niche = parse_niche(_pack(music={"mood": folder.name}))
+        for brief in _music_briefs(niche, 4):
+            for seed in range(4):
+                entry = plan_module.to_manifest_entry(brief, niche, seed=seed)
+                with self.subTest(file=entry["bgm_file"]):
+                    _resolve_bgm_file(entry["bgm_file"])
+
+
+# One pack, written out the way a pack really arrives: as a file load_all_niches
+# has to read, parse and keep in the listing.
+_MOOD_PACK_TOML = """\
+[niche]
+id = "demo-music"
+name = "Demo Music Niche"
+platforms = ["tiktok"]
+
+[economics]
+cpm_low = 5.0
+cpm_high = 10.0
+
+[audience]
+description = "demo audience"
+pain_points = ["a pain"]
+
+[content]
+angles = ["contrarian", "mechanism"]
+system_prompt = "Write plainly."
+visual_terms = ["city skyline morning"]
+
+[music]
+mood = "{mood}"
+"""
+
+
+class TestEveryShippedPackMusic(unittest.TestCase):
+    """The [music] section of every pack, discovered rather than listed: the
+    set grows, and a name typed here would stop covering the pack added
+    after it."""
+
+    def setUp(self):
+        self.packs = load_all_niches()
+
+    def test_every_declared_mood_names_a_folder_that_is_there(self):
+        """The folders ship empty on purpose - the owner adds licensed music
+        later, and until then the pack keeps today's random built-in track.
+        What cannot wait is the name: a mood with no folder behind it, a typo
+        or one deleted with its .gitkeep, leaves that pack on the shared songs
+        for good, and tracks dropped in later never reach it. Nothing reports
+        that - the render succeeds, it just sounds like every other channel."""
+        from growth.niche import MUSIC_DIR, mood_tracks
+
+        for pack in self.packs:
+            if not pack.music.mood:
+                continue
+            with self.subTest(pack.id):
+                folder = MUSIC_DIR / pack.music.mood
+                self.assertTrue(
+                    folder.is_dir(), f"resource/songs/{pack.music.mood} does not exist"
+                )
+                # Whatever has been added to it by now must be openable: a
+                # track the resolver refuses fails the render, not the plan.
+                for track in mood_tracks(pack.music.mood):
+                    _resolve_bgm_file(f"{pack.music.mood}/{track}")
+
+    def test_every_music_prompt_fits_the_field_that_carries_it(self):
+        """One character over and VideoParams rejects the entry, which rejects
+        the manifest, which fails the batch before the first render."""
+        limit = _music_prompt_limit()
+        for pack in self.packs:
+            with self.subTest(pack.id):
+                self.assertLessEqual(len(pack.music.prompt), limit)
+
+    def test_every_pack_carries_its_own_declared_music_into_a_task(self):
+        """A pack that declares music and plans a random built-in track is
+        exactly the bug the section was added to fix, and nothing downstream
+        would report it: the video renders, it just sounds like the rest."""
+        from growth.niche import mood_tracks
+
+        for pack in self.packs:
+            with self.subTest(pack.id):
+                entry = plan_module.to_manifest_entry(
+                    _synthetic_brief(pack), pack, seed=6
+                )
+                _check_batch_entry(entry)
+                if pack.music.uses_ai:
+                    self.assertEqual(entry["bgm_type"], pack.music.provider)
+                    self.assertEqual(entry["video_music_prompt"], pack.music.prompt)
+                elif mood_tracks(pack.music.mood):
+                    self.assertTrue(
+                        entry["bgm_file"].startswith(f"{pack.music.mood}/")
+                    )
+                    _resolve_bgm_file(entry["bgm_file"])
+                else:
+                    self.assertEqual(entry["bgm_type"], "random")
+
+    def test_a_pack_whose_mood_folder_is_missing_still_loads(self):
+        """Music arrives folder by folder. A pack that stops loading because
+        its tracks are not there yet drops out of the listing entirely - and
+        load_all_niches only logs that, so the channel is simply gone."""
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            (root / "demo-music.toml").write_text(
+                _MOOD_PACK_TOML.format(mood="mood-nobody-has-added-yet"),
+                encoding="utf-8",
+            )
+            packs = load_all_niches(root)
+            self.assertEqual([pack.id for pack in packs], ["demo-music"])
+            self.assertEqual(packs[0].music.mood, "mood-nobody-has-added-yet")
+
+
+class TestMoodTrackVariesAcrossABatch(unittest.TestCase):
+    """The point of the folders. One batch must not be one track eight times,
+    and a batch replanned from its seed must come out the same."""
+
+    def setUp(self):
+        self.folder = _mood_folder(self, *(f"track{i}.mp3" for i in range(8)))
+        self.niche = parse_niche(_pack(music={"mood": self.folder.name}))
+        self.briefs = _music_briefs(self.niche, 8)
+
+    def _files(self, **kwargs) -> list[str]:
+        return [
+            plan_module.to_manifest_entry(brief, self.niche, **kwargs)["bgm_file"]
+            for brief in self.briefs
+        ]
+
+    def test_the_same_seed_plans_the_same_tracks(self):
+        """A plan is rebuilt from its seed to reproduce a batch; music that
+        moves between runs makes the rerun a different set of videos."""
+        self.assertEqual(self._files(seed=17), self._files(seed=17))
+
+    def test_a_batch_does_not_put_one_track_on_every_video(self):
+        """The 29-song problem again, one folder deeper. It is silent: every
+        entry still validates and every video still renders, so the first
+        thing that catches it is a person watching the uploads."""
+        self.assertGreater(len(set(self._files(seed=17))), 1)
+
+    def test_a_batch_repeats_a_track_only_once_the_folder_runs_out(self):
+        """Eight tracks, eight videos, no repeat: the folder is walked from
+        one entry point per batch rather than drawn from per video, which
+        would land on the same track twice in a batch of eight more often
+        than not."""
+        self.assertEqual(len(set(self._files(seed=17))), 8)
+
+    def test_different_seeds_enter_the_folder_at_different_places(self):
+        """Otherwise every batch of this pack opens on the same track, which
+        is the one a returning viewer hears every time."""
+        self.assertGreater(len({tuple(self._files(seed=s)) for s in range(12)}), 1)
+
+    def test_a_folder_holding_one_track_uses_it_for_every_video(self):
+        folder = _mood_folder(self, "only.mp3")
+        niche = parse_niche(_pack(music={"mood": folder.name}))
+        files = {
+            plan_module.to_manifest_entry(brief, niche, seed=3)["bgm_file"]
+            for brief in _music_briefs(niche, 3)
+        }
+        self.assertEqual(files, {f"{folder.name}/only.mp3"})
+
+    def test_a_real_unseeded_batch_still_gives_each_video_its_own_track(self):
+        """create_plan is where the choice is threaded through the batch.
+        Drawing once per entry instead would put the same track on two of four
+        videos better than half the time, with no seed to reproduce it from."""
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            with (
+                patch.object(plan_module, "HISTORY_DIR", root / "history"),
+                patch.object(plan_module, "PLANS_DIR", root / "plans"),
+                patch.object(plan_module, "load_niche", return_value=self.niche),
+                patch(
+                    "app.services.llm._generate_response",
+                    return_value=_briefs_json(4),
+                ),
+            ):
+                plan = plan_module.create_plan(
+                    "demo", count=4, out_dir=root / "batch"
+                )
+            entries = [
+                json.loads(line)
+                for line in Path(plan["manifest"])
+                .read_text(encoding="utf-8")
+                .splitlines()
+                if line.strip()
+            ]
+        self.assertEqual(len(entries), 4)
+        for index, entry in enumerate(entries, start=1):
+            _check_batch_entry(entry, index=index)
+            _resolve_bgm_file(entry["bgm_file"])
+        self.assertEqual(len({entry["bgm_file"] for entry in entries}), 4)
+
+
+# The fields a task carried before packs could choose their music. Snapshotted
+# rather than derived from the code it guards, which would agree with any drift.
+_DEFAULT_MANIFEST_KEYS = frozenset(
+    {
+        "video_subject",
+        "video_script_prompt",
+        "custom_system_prompt",
+        "video_terms",
+        "video_language",
+        "paragraph_number",
+        "video_aspect",
+        "video_source",
+        "video_concat_mode",
+        "match_materials_to_script",
+        "video_transition_mode",
+        "video_clip_duration",
+        "video_count",
+        "voice_name",
+        "voice_rate",
+        "bgm_type",
+        "bgm_volume",
+        "subtitle_enabled",
+        "subtitle_position",
+        "subtitle_display_mode",
+        "subtitle_animation",
+        "font_name",
+        "font_size",
+        "text_fore_color",
+        "stroke_color",
+        "stroke_width",
+        "n_threads",
+        "custom_position",
+    }
+)
+
+
+class TestPackWithoutMusicPlansExactlyAsBefore(unittest.TestCase):
+    """The path every pack takes until someone puts audio in a mood folder or
+    turns a provider on, so a change here changes every channel at once."""
+
+    def setUp(self):
+        self.niche = parse_niche(_pack())
+        self.entry = plan_module.to_manifest_entry(
+            _synthetic_brief(self.niche), self.niche, seed=9
+        )
+
+    def test_the_entry_carries_exactly_the_keys_it_carried_before(self):
+        """A dropped key changes how every video renders; an added one is a
+        field the batch validator rejects the whole manifest over."""
+        self.assertEqual(set(self.entry), _DEFAULT_MANIFEST_KEYS)
+
+    def test_the_task_still_asks_for_a_random_built_in_track(self):
+        self.assertEqual(self.entry["bgm_type"], "random")
+        self.assertEqual(self.entry["bgm_volume"], self.niche.video.bgm_volume)
+        _check_batch_entry(self.entry)
+
+    def test_a_mood_with_no_tracks_yet_plans_the_identical_entry(self):
+        """A pack may name its music before the tracks exist. Until they do it
+        has to plan what it planned before, not a file nothing can open."""
+        for mood in ("mood-nobody-has-added-yet", _mood_folder(self, "README.md").name):
+            with self.subTest(mood=mood):
+                niche = parse_niche(_pack(music={"mood": mood}))
+                entry = plan_module.to_manifest_entry(
+                    _synthetic_brief(niche), niche, seed=9
+                )
+                self.assertEqual(entry, self.entry)
+
+
+class TestGeneratedMusic(unittest.TestCase):
+    """A pack can ask an AI provider for its music instead of naming a folder.
+    Both halves have to be present, and the engine reads them by exact name."""
+
+    def test_uses_ai_needs_both_a_provider_and_a_prompt(self):
+        """Half a configuration must not route the task away from the pack's
+        own music: the engine takes bgm_type as the provider and would find
+        nothing to generate from, or hold a prompt nobody is sent."""
+        both = _pack(music={"provider": "sonilo", "prompt": "warm piano"})
+        self.assertTrue(parse_niche(both).music.uses_ai)
+        for label, music in {
+            "prompt alone": {"prompt": "warm piano"},
+            "empty provider": {"provider": "", "prompt": "warm piano"},
+            "mood only": {"mood": "cinematic"},
+            "neither": {},
+        }.items():
+            with self.subTest(label):
+                self.assertFalse(parse_niche(_pack(music=music)).music.uses_ai)
+
+    def test_a_provider_with_nothing_to_generate_from_is_refused(self):
+        """It renders as a generic built-in track while the pack claims
+        generated music: a downgrade that shows up in no log."""
+        for prompt in ("", "   "):
+            with self.subTest(prompt=prompt):
+                with self.assertRaises(NicheError):
+                    parse_niche(_pack(music={"provider": "sonilo", "prompt": prompt}))
+
+    def test_only_providers_the_engine_can_call_are_accepted(self):
+        """bgm_type is looked up in task.py's provider table by exact name.
+        Anything else is not an error there - it falls through to a random
+        built-in song, so the pack has to be refused at load."""
+        for provider in sorted(_engine_music_providers()):
+            with self.subTest(provider=provider):
+                niche = parse_niche(
+                    _pack(music={"provider": provider, "prompt": "warm piano"})
+                )
+                self.assertEqual(niche.music.provider, provider)
+        # "random" and "custom" are bgm_type values, not providers: the pair
+        # most likely to be written into a pack by someone reading cli.py.
+        for provider in ("suno", "openai", "eleven-labs", "random", "custom"):
+            with self.subTest(provider=provider):
+                with self.assertRaises(NicheError):
+                    parse_niche(
+                        _pack(music={"provider": provider, "prompt": "warm piano"})
+                    )
+
+    def test_a_prompt_with_no_provider_stays_out_of_the_task(self):
+        """Every shipped pack writes its prompt and leaves provider empty, so
+        turning the paid path on stays the owner's decision. Sending the
+        prompt anyway has cli.py reject the manifest - video_music_prompt is
+        accepted only with a provider - and that is every batch of every pack,
+        not one video."""
+        folder = _mood_folder(self, "one.mp3")
+        for label, music in {
+            "prompt alone": {"prompt": "warm piano"},
+            "prompt and a filled mood": {"prompt": "warm piano", "mood": folder.name},
+        }.items():
+            with self.subTest(label):
+                niche = parse_niche(_pack(music=music))
+                entry = plan_module.to_manifest_entry(
+                    _synthetic_brief(niche), niche, seed=2
+                )
+                self.assertNotIn("video_music_prompt", entry)
+                _check_batch_entry(entry)
+
+    def test_the_prompt_reaches_the_task_the_way_the_engine_reads_it(self):
+        """task.py takes the provider off bgm_type and the prompt off
+        video_music_prompt; spelled any other way the pack's videos play a
+        random built-in song and the prompt is never sent."""
+        niche = parse_niche(
+            _pack(music={"provider": "sonilo", "prompt": "slow dark piano, no drums"})
+        )
+        entry = plan_module.to_manifest_entry(_synthetic_brief(niche), niche, seed=2)
+        self.assertEqual(entry["bgm_type"], "sonilo")
+        _check_batch_entry(entry)
+        self.assertEqual(
+            VideoParams(**entry).video_music_prompt, "slow dark piano, no drums"
+        )
+
+    def test_generated_music_wins_over_a_mood_folder(self):
+        """Declaring both is useful - the folder is what a render falls back
+        to - but naming a file as well has cli.py reject the whole manifest:
+        bgm_file is accepted with bgm_type=custom and no other."""
+        folder = _mood_folder(self, "one.mp3")
+        niche = parse_niche(
+            _pack(
+                music={
+                    "mood": folder.name,
+                    "provider": "elevenlabs",
+                    "prompt": "warm piano",
+                }
+            )
+        )
+        entry = plan_module.to_manifest_entry(_synthetic_brief(niche), niche, seed=2)
+        self.assertEqual(entry["bgm_type"], "elevenlabs")
+        self.assertNotIn("bgm_file", entry)
+        _check_batch_entry(entry)
+
+    def test_a_prompt_one_character_over_the_engine_limit_is_refused(self):
+        """The pack keeps its own ceiling, so the two have to be the same
+        number: one over, and VideoParams rejects the entry, which fails the
+        batch as a whole before the first task runs."""
+        limit = _music_prompt_limit()
+        niche = parse_niche(_pack(music={"provider": "sonilo", "prompt": "x" * limit}))
+        _check_batch_entry(
+            plan_module.to_manifest_entry(_synthetic_brief(niche), niche, seed=2)
+        )
+        with self.assertRaises(NicheError):
+            parse_niche(_pack(music={"provider": "sonilo", "prompt": "x" * (limit + 1)}))

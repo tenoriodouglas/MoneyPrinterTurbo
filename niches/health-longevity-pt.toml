@@ -177,6 +177,27 @@ custom_position = 62.0
 clip_duration = 4
 paragraph_number = 5
 
+# Same channel and mood as health-longevity, and this is the strictest pack in
+# the whole set: the ANVISA-shaped rules above forbid promising emagrecimento,
+# cura, reversão de doença or any other outcome, and ban "cura natural" and
+# "fórmula milagrosa". A hopeful swell would make that promise musically, so the
+# bed is kept flat and arc-free. The palette warms slightly for a Brazilian ear
+# without gaining any lift. English prompt for the same reason as visual_terms:
+# the provider reads it, not the narrator.
+[music]
+mood = "calm"
+prompt = """
+Quiet instrumental bed for a narrated explainer about health habits and evidence \
+in Brazilian Portuguese. Soft sustained pads with sparse nylon-string guitar \
+notes, very slow near 65 BPM, almost no percussion, low and still underneath. \
+Warm but deliberately unhopeful: no swelling strings, no rising motif, no \
+crescendo, no uplifting arc, because the script may not promise weight loss, \
+recovery or any other result. Steady and unobtrusive from start to finish. Keep \
+the midrange clear and the level low so it sits under the narration and never \
+competes with the voice. Instrumental only, no vocals, no lyrics, no vocal \
+samples.
+"""
+
 [platform]
 # ASCII on purpose: unaccented tags are what pt-BR creators type and what
 # search matches most reliably across platforms.

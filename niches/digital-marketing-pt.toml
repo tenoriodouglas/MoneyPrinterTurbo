@@ -139,6 +139,26 @@ custom_position = 62.0
 clip_duration = 4
 paragraph_number = 5
 
+# Same channel and same mood as digital-marketing, and the guardrail behind that
+# mood is stricter here: this pack forbids promising faturamento, revenue, client
+# counts or reach in any form, and bans "fature 10k por mês", "renda passiva" and
+# "mentalidade de milionário". The pt-BR guru genre has an even more fixed sound
+# than the English one, so the prompt rules it out by name. English prompt for
+# the same reason as visual_terms: the provider reads it, not the narrator.
+[music]
+mood = "calm"
+prompt = """
+Dry, understated instrumental groove for a narrated explainer about pricing work \
+and finding clients in Brazilian Portuguese. Warm muted guitar and soft keys over \
+a relaxed, low-key beat near 90 BPM with a rounded bass. It must avoid the sound \
+the Portuguese-language business-guru genre is built on: no trap hi-hat rolls, no \
+rising builds, no drops, no triumphant brass, no motivational piano swell, \
+nothing that sounds like earnings being announced. Flat and matter-of-fact \
+throughout, confident but never celebratory. Keep the midrange open and the \
+texture thin so it sits below the narration and does not compete with the voice. \
+Instrumental only, no vocals, no lyrics, no vocal samples.
+"""
+
 [platform]
 # ASCII on purpose: unaccented tags are what pt-BR creators type and what
 # search matches most reliably across platforms.

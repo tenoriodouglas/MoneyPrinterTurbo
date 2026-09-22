@@ -9,12 +9,14 @@ runs every one of them in a few seconds instead, before a batch is started.
 
 from __future__ import annotations
 
+import os
 import re
 import shutil
 import subprocess
 import sys
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Any
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 SUPPORTED_PYTHON = {(3, 11), (3, 12), (3, 13)}
@@ -22,6 +24,16 @@ SUPPORTED_PYTHON = {(3, 11), (3, 12), (3, 13)}
 # hang the command.
 NETWORK_TIMEOUT = 30
 MIN_FREE_GB = 5
+# The AI music services a pack may name (app/services/task.py
+# _VIDEO_MUSIC_PROVIDERS), mapped to the credential each one's is_enabled()
+# reads: config.toml table, key, and the environment variable it accepts
+# instead (sonilo.get_api_key, elevenlabs_music.get_api_key). Mirrored rather
+# than imported because app.services.task pulls in moviepy and every provider
+# SDK, and a local check has to run with no engine configuration at all.
+MUSIC_PROVIDER_KEYS = {
+    "sonilo": ("app", "sonilo_api_key", "SONILO_API_KEY"),
+    "elevenlabs": ("elevenlabs", "api_key", "ELEVENLABS_API_KEY"),
+}
 
 OK = "ok"
 WARN = "warn"
@@ -142,6 +154,177 @@ def _check_pack_voices() -> Check:
                 f"edit [video].voice_names in {path}; the engine's list is {VOICES_DATA_FILE}",
             )
     return Check("voices", OK, "every pack's voices exist")
+
+
+def _config_tables() -> dict[str, Any]:
+    """config.toml as plain tables, empty when it cannot be read.
+
+    Read from disk rather than through app.config, which snapshots the file
+    once at import and brings the engine with it. A missing or unparsable file
+    is not reported here: _check_config already names that.
+    """
+    import tomllib
+
+    try:
+        # utf-8-sig mirrors app/config: a BOM the engine reads happily is a
+        # parse error to bare tomllib.
+        return tomllib.loads((REPO_ROOT / "config.toml").read_text(encoding="utf-8-sig"))
+    except (OSError, ValueError):
+        return {}
+
+
+def _music_provider_configured(tables: dict[str, Any], provider: str) -> bool:
+    """Whether that provider's key is set, in config.toml or the environment."""
+    section, key, env_var = MUSIC_PROVIDER_KEYS[provider]
+    table = tables.get(section)
+    stored = str(table.get(key, "") or "").strip() if isinstance(table, dict) else ""
+    return bool(stored or os.getenv(env_var, "").strip())
+
+
+def _first_few(items: list[str], limit: int = 3, separator: str = "; ") -> str:
+    """Join for a one-line detail: the first few, then a count for the rest."""
+    remaining = len(items) - limit
+    joined = separator.join(items[:limit])
+    return f"{joined} (+{remaining} more)" if remaining > 0 else joined
+
+
+def _repo_path(path: Path) -> str:
+    """Repo-relative where possible: a fix is typed at the repo root."""
+    try:
+        return str(path.relative_to(REPO_ROOT))
+    except ValueError:
+        return str(path)
+
+
+def _packs_label(packs: list[str], limit: int = 2) -> str:
+    """Name the packs while there are few enough to be worth naming."""
+    return ", ".join(packs) if len(packs) <= limit else f"{len(packs)} packs"
+
+
+def _check_pack_music() -> Check:
+    """Every pack's [music] must resolve to tracks on disk, or to a provider
+    that can actually be called.
+
+    The pack files are read directly, like the voices check above and for the
+    same reason: a pack whose [music] is malformed is dropped by
+    load_all_niches, so the pack worth naming is the one missing from it.
+
+    The two faults get different severities because the renders do. A mood
+    folder with nothing in it still produces a video: plan.py falls back to
+    bgm_type "random" and the batch ships, sounding like every other channel,
+    so it is a warning. A provider is different: plan.py passes it through as
+    the task's bgm_type, and app/services/task.py refuses a task whose music
+    provider has no key at preflight, before a line of script is written. That
+    batch renders nothing at all, which is a failure.
+    """
+    import tomllib
+
+    from app.services.bgm import SUPPORTED_BGM_EXTENSIONS
+    from growth.niche import MUSIC_DIR, NICHES_DIR, MusicStyle, mood_tracks
+
+    formats = "/".join(extension.lstrip(".") for extension in SUPPORTED_BGM_EXTENSIONS)
+    tables = _config_tables()
+    paid: list[str] = []  # packs that buy their music one video at a time
+    filled: set[str] = set()
+    fails: list[tuple[str, str]] = []
+    # (mood, what is wrong with it) -> the packs that named it. Grouped by mood
+    # rather than by pack because both markets ship a pack per vertical: one
+    # unfilled folder is otherwise reported eight times, and the folder to go
+    # and fill is lost in the repetition.
+    silent: dict[tuple[str, str], list[str]] = {}
+
+    for path in sorted(NICHES_DIR.glob("*.toml")):
+        try:
+            with path.open("rb") as handle:
+                raw = tomllib.load(handle).get("music", {})
+        except (tomllib.TOMLDecodeError, OSError) as exc:
+            return Check("music", FAIL, f"{path.name}: {exc}"[:150], f"fix the TOML in {path}")
+        if not isinstance(raw, dict):
+            return Check(
+                "music", FAIL, f"{path.name}: [music] must be a table",
+                f"edit [music] in {path}",
+            )
+        # Normalised exactly as niche._build_music_style does, so the doctor
+        # and the loader never read one pack two ways.
+        style = MusicStyle(
+            mood=str(raw.get("mood", "")).strip(),
+            prompt=str(raw.get("prompt", "")).strip(),
+            provider=str(raw.get("provider", "")).strip().lower(),
+        )
+        pack = path.stem
+
+        if style.provider:
+            if style.provider not in MUSIC_PROVIDER_KEYS:
+                fails.append((
+                    f"{pack}: no music provider is called {style.provider!r}",
+                    f"set [music].provider in {path} to one of "
+                    f"{', '.join(sorted(MUSIC_PROVIDER_KEYS))}, or remove it",
+                ))
+            elif not style.uses_ai:
+                # niche.py refuses to load a pack like this, which takes it out
+                # of every listing without taking it off the render command.
+                fails.append((
+                    f"{pack}: [music].provider {style.provider} has no prompt to generate from",
+                    f"add [music].prompt to {path}, or remove [music].provider",
+                ))
+            elif not _music_provider_configured(tables, style.provider):
+                section, key, env_var = MUSIC_PROVIDER_KEYS[style.provider]
+                fails.append((
+                    f"{pack}: {style.provider} generates every video's music "
+                    "and has no credential",
+                    f"set {key} under [{section}] in config.toml "
+                    f"(or export {env_var}), or remove [music].provider from {path}",
+                ))
+            else:
+                paid.append(f"{pack} via {style.provider}")
+            # A pack on the provider path never reads its mood folder; the
+            # folder only matters when the provider is missing, which is the
+            # failure above rather than a second warning here.
+            continue
+
+        if not style.mood:
+            continue
+        if mood_tracks(style.mood):
+            filled.add(style.mood)
+        elif (MUSIC_DIR / style.mood).is_dir():
+            silent.setdefault((style.mood, "holds no audio"), []).append(pack)
+        else:
+            silent.setdefault((style.mood, "has no folder"), []).append(pack)
+
+    if fails:
+        detail = _first_few([text for text, _ in fails])
+        # Counted rather than left for the next run: fixing the key would
+        # otherwise turn the fail into a warning nobody had been told about.
+        if silent:
+            detail += f"; also {len(silent)} mood folder(s) with no music"
+        return Check(
+            "music", FAIL, detail[:200],
+            _first_few(list(dict.fromkeys(fix for _, fix in fails)), limit=2),
+        )
+    if silent:
+        groups = [
+            f"{_repo_path(MUSIC_DIR / mood)} {problem} ({_packs_label(packs)})"
+            for (mood, problem), packs in silent.items()
+        ]
+        detail = f"{_first_few(groups, limit=2)}; those fall back to the built-in songs"
+        if paid:
+            detail += f"; billed per video: {_first_few(paid, limit=2)}"
+        folders = [_repo_path(MUSIC_DIR / mood) for mood, _ in silent]
+        fix = f"put {formats} files in {_first_few(folders, limit=3, separator=', ')}"
+        if any(problem == "has no folder" for _, problem in silent):
+            fix += "; the missing ones have to be created first"
+        return Check("music", WARN, detail[:200], fix)
+    parts = []
+    if paid:
+        # Generated music is charged per render, so the owner is told it is on
+        # even when nothing is wrong with it.
+        parts.append(f"billed per video: {_first_few(paid)}")
+    if filled:
+        parts.append(f"tracks in {', '.join(sorted(filled))}")
+    return Check(
+        "music", OK,
+        "; ".join(parts)[:200] or "no pack sets [music]; renders use the built-in songs",
+    )
 
 
 def _summarise_provider_error(message: str) -> tuple[str, str]:
@@ -313,6 +496,7 @@ _LOCAL_CHECKS = (
     _check_config,
     _check_fonts,
     _check_pack_voices,
+    _check_pack_music,
 )
 _NETWORK_CHECKS = (_check_llm, _check_materials, _check_voice)
 

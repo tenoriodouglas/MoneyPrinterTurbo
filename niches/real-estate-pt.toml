@@ -153,7 +153,7 @@ paragraph_number = 5
 
 # Same channel as real-estate for the Brazilian market: same mood, same weighted
 # identity. The guardrails push harder here -- the rules above forbid projecting
-# valorizacao or rental return, and "imovel nunca desvaloriza" is a banned phrase
+# valorização or rental return, and "imóvel nunca desvaloriza" is a banned phrase
 # -- so the bed carries no hopeful lift at all. English prompt for the same
 # reason as visual_terms: the music provider reads it, the narrator does not.
 # The palette turns acoustic for a Brazilian ear while staying rhythmically

@@ -9,8 +9,9 @@ O acervo antigo deste diretório são 29 arquivos, `output000.mp3` até
 `output029.mp3` (o `output026.mp3` não existe — a sequência tem buracos). Eles
 foram medidos, um por um:
 
-- **Todos têm exatamente 180 segundos de duração.** Os 29.
-- **Todos ficam entre -19,7 e -23,9 LUFS**, uma faixa estreitíssima de volume
+- **Vinte e oito das 29 têm exatamente 180,000 segundos.** A `output029` é a
+  única exceção, com 134.
+- **Todos ficam entre -19,7 e -24,4 LUFS**, uma faixa estreitíssima de volume
   percebido.
 
 Isso não é um acervo de 29 músicas. É **uma ideia só, renderizada 29 vezes pelo
@@ -54,20 +55,23 @@ não o clima do assunto.
 
 | Pasta | Clima | Packs |
 |---|---|---|
-| `calm/` | Discreto, mínimo, quase ausente. Um colchão que não chama atenção. | `health-longevity`, `b2b-software`, `real-estate` (+ `-pt`) |
-| `upbeat/` | Movimento leve para frente, otimista, sem euforia nem "hype" de anúncio. | `ai-tools`, `digital-marketing`, `personal-finance` (+ `-pt`) |
+| `calm/` | Discreto, mínimo, quase ausente. Um colchão que não chama atenção. | `personal-finance`, `real-estate`, `health-longevity`, `digital-marketing`, `free-theme` (+ `-pt`) |
+| `upbeat/` | Movimento leve para frente, otimista, sem euforia nem "hype" de anúncio. | `ai-tools`, `b2b-software` (+ `-pt`) |
 | `dark/` | Tensão, drone grave, ambiente de horror. | `ghost-stories` (+ `-pt`) |
 | `mystery/` | Suspense não resolvido, clima documental de arquivo. Sem susto. | `ufo-sightings` (+ `-pt`) |
 
 Por que estes quatro, e não mais:
 
-- **`calm`** — `health-longevity` (mecanismo, corpo, adesão), `b2b-software`
-  (auditoria de custo, processo) e `real-estate` (custo real, ponto de
-  equilíbrio) são packs em que a narração carrega tudo e há número para
-  acompanhar. Música com personalidade só atrapalha.
-- **`upbeat`** — `ai-tools`, `digital-marketing` e `personal-finance` vendem
-  ganho: tempo economizado, oferta reescrita, juros compostos. Pedem energia
-  contida, não solenidade.
+- **`calm`** — a pasta mais cheia, e o motivo não é o assunto, é a trava
+  editorial. `personal-finance` e `real-estate` proíbem prometer retorno;
+  `health-longevity` proíbe prometer resultado; `digital-marketing` é o pack
+  com mais risco de soar como o conteúdo de "fature 10k" que ele tenta não
+  ser. Trilha que sobe como anúncio promete o que o roteiro se recusa a
+  prometer — e o espectador acredita na música, não na ressalva.
+- **`upbeat`** — `ai-tools` e `b2b-software` são demonstrativos: mostram uma
+  ferramenta funcionando, um processo ficando mais barato. Pedem movimento
+  para frente sem urgência. É a única pasta onde energia não entra em conflito
+  com o que o pack pode afirmar.
 - **`dark`** — `ghost-stories` é o único caso em que a trilha faz trabalho
   dramático de verdade, e o pack admite isso: é o único com `bgm_volume = 0.2`,
   acima de todos os outros. Um comentário no próprio pack diz que "the ambient
@@ -77,10 +81,12 @@ Por que estes quatro, e não mais:
   `witness-testimony`: é relatório, não assombração. Trilha de horror ali soa
   sensacionalista e desmente o tom sóbrio que o pack persegue.
 
-**`free-theme` e `free-theme-pt` ficam de fora de propósito.** O tema é definido
-pelo operador na hora de rodar, então o humor certo também só é conhecido na
-hora. Sem `mood`, esses dois caem no acervo geral — e, quando o operador souber
-o tema do dia, pode apontar o humor manualmente.
+**`free-theme` e `free-theme-pt` usam `calm`.** O tema é definido na hora, então
+o humor certo só seria conhecido na hora — mas deixar `mood` vazio devolve esses
+dois ao acervo de 29 faixas, que é exatamente o defeito sendo corrigido. `calm`
+é a escolha honesta na ausência de informação: discreto o bastante para não
+desmentir assunto nenhum. Uma trilha alegre sob um acidente industrial é pior
+que uma trilha neutra sob qualquer coisa.
 
 Nenhuma pasta foi criada para um pack só, e nenhuma pasta foi criada sem pack que
 a use.
@@ -115,8 +121,7 @@ parser aplica hoje:
 - **Declarar `mood` e `prompt` juntos é útil**, e o código diz isso: o `mood` é
   o fallback de quando o provedor não está configurado.
 
-A adoção nos packs está em andamento (`ghost-stories` → `dark` e
-`ufo-sightings` → `mystery` já declaram a seção). A tabela acima é o mapeamento
+Os 18 packs já declaram a seção. A tabela acima é o mapeamento
 completo; se algum pack ainda não tiver `[music]`, ele simplesmente continua no
 acervo genérico até ganhar a seção.
 
@@ -283,7 +288,7 @@ como loop).
 
 ### Volume medido (loudness)
 
-O acervo antigo está entre **-19,7 e -23,9 LUFS**, e os `bgm_volume` dos packs
+O acervo antigo está entre **-19,7 e -24,4 LUFS**, e os `bgm_volume` dos packs
 (0,12 a 0,2) foram ajustados nessa premissa. Como o multiplicador é fixo, uma
 faixa masterizada em -9 LUFS vai sair **muito** mais alta que as outras com o
 mesmo `bgm_volume`. Se puder, normalize o que você adicionar para perto de

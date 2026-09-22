@@ -111,6 +111,24 @@ custom_position = 62.0
 clip_duration = 4
 paragraph_number = 5
 
+# The strictest pack in the set: it may never promise an outcome, and it bans
+# "cure", "miracle" and "boost your immune system". The uplifting swell that
+# transformation content runs on would make exactly the promise the script
+# refuses, so the bed is calm, slow and deliberately arc-free -- no motif that
+# resolves into a better ending.
+[music]
+mood = "calm"
+prompt = """
+Quiet instrumental bed for a narrated explainer about health habits and the \
+evidence behind them. Soft sustained pads and sparse, widely spaced piano notes, \
+very slow near 65 BPM, with almost no percussion and a low, still bass. Calm and \
+neutral rather than hopeful: no swelling strings, no rising motif, no crescendo \
+and no arc toward a better ending, because the script is not allowed to promise \
+an outcome. Even and unobtrusive from first bar to last. Keep it well below a \
+speaking voice with the midrange left clear so it never competes with the \
+narration. Instrumental only, no vocals, no lyrics, no vocal samples.
+"""
+
 [platform]
 hashtags = ["#healthhabits", "#longevity", "#wellness", "#sleep", "#nutrition"]
 
