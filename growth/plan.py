@@ -59,7 +59,12 @@ class Brief:
         rather than just the subject line.
         """
         points = "\n".join(f"- {p}" for p in self.key_points)
-        banned = ", ".join(f'"{p}"' for p in niche.banned_phrases[:8])
+        # Every phrase the pack banned, not a fixed first few. Measured across
+        # the packs, the whole list costs at most ~50 characters against 600 of
+        # headroom, so capping it only dropped editorial intent in silence. The
+        # ceiling below is the real limit, and it trims this part first because
+        # it is appended last.
+        banned = ", ".join(f'"{p}"' for p in niche.banned_phrases)
         parts = [
             f"Editorial angle: {self.angle}",
             f"Open with this idea (rephrase it, do not read it verbatim): {self.hook}",

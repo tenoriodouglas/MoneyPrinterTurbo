@@ -2,6 +2,7 @@ import io
 import json
 import sys
 import tempfile
+from dataclasses import replace
 import unittest
 from pathlib import Path
 import unittest.mock
@@ -13,7 +14,7 @@ import cli
 from app.models.schema import VideoParams
 from growth import plan as plan_module
 from growth import produce as produce_module
-from growth.niche import NicheError, load_all_niches, load_niche, parse_niche
+from growth.niche import MAX_SCRIPT_PROMPT, NicheError, load_all_niches, load_niche, parse_niche
 
 _VALID_PACK = {
     "niche": {
@@ -783,3 +784,44 @@ class TestThemedPlan(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TestBannedPhrasesReachTheScript(unittest.TestCase):
+    """A pack's banned phrases are its voice: they are what stops every video
+    opening "você não vai acreditar". Five packs declared more than the script
+    prompt carried, and the extras were dropped without a word."""
+
+    def _brief(self):
+        return plan_module.Brief(
+            subject="a subject",
+            angle="an angle",
+            hook="a hook",
+            key_points=["one", "two"],
+            search_terms=["a street at night"],
+            call_to_action="do the thing",
+        )
+
+    def test_every_declared_phrase_is_passed_on(self):
+        for niche in load_all_niches():
+            with self.subTest(niche=niche.id):
+                prompt = self._brief().script_prompt(niche)
+                for phrase in niche.banned_phrases:
+                    self.assertIn(phrase, prompt)
+
+    def test_the_prompt_still_fits_the_engine_ceiling(self):
+        """The reason a cap existed at all. It has to hold without one."""
+        for niche in load_all_niches():
+            with self.subTest(niche=niche.id):
+                self.assertLessEqual(
+                    len(self._brief().script_prompt(niche)), MAX_SCRIPT_PROMPT
+                )
+
+    def test_an_absurd_list_is_trimmed_rather_than_overflowing(self):
+        """Banned phrases are appended last precisely so that an overlong pack
+        loses them before it loses the angle or the hook."""
+        niche = load_all_niches()[0]
+        bloated = replace(niche, banned_phrases=tuple(f"phrase {i}" for i in range(500)))
+        prompt = self._brief().script_prompt(bloated)
+        self.assertLessEqual(len(prompt), MAX_SCRIPT_PROMPT)
+        self.assertIn("Editorial angle", prompt)
+        self.assertIn("a hook", prompt)
