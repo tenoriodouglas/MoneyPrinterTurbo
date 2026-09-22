@@ -72,11 +72,13 @@ Com memoria suficiente:
 ```bash
 # O diretorio precisa ser do Linux, nunca /mnt/c
 cd ~
-git clone -b claude/blissful-lamport-2qe81i \
-  https://github.com/tenoriodouglas/MoneyPrinterTurbo.git
+git clone https://github.com/tenoriodouglas/MoneyPrinterTurbo.git
 cd MoneyPrinterTurbo
 deploy/wsl-setup.sh
 ```
+
+Se o trabalho ainda nao estiver mesclado, use o branch indicado no pull request
+aberto: `git checkout <branch-do-pr>` antes de rodar o `wsl-setup.sh`.
 
 ### O que o script trata
 
@@ -258,7 +260,9 @@ Shorts é o pior caminho e o que funciona melhor.
 
 ## Pelo Telegram
 
-Dispara os lotes e recebe os vídeos no celular, sem SSH. Como o bot faz
+Dispara os lotes pelo celular, sem SSH. Enquanto o render corre, o bot vai
+dizendo onde está — etapa atual, quantas cenas já ficaram prontas, porcentagem
+aproximada e quanto tempo ainda falta — e no fim manda o vídeo. Como o bot faz
 *polling*, o servidor **não precisa de porta aberta, domínio nem certificado** —
 o que elimina a parte mais chata de configurar uma VPS gratuita.
 
@@ -274,9 +278,10 @@ python -m growth config --telegram-user SEU_USER_ID
 deploy/install-bot.sh
 ```
 
-Comandos: `/niches`, `/run <nicho> [n]`, `/status`, `/review`, `/last [n]`.
+Comandos: `/start` e `/help` (os dois mostram o menu), `/niches`,
+`/run <nicho> [n]`, `/status`, `/review [n]` (n entre 1 e 20), `/last [n]`.
 
-Três coisas de propósito:
+Quatro coisas de propósito:
 
 - **A trava é pelo seu usuário do Telegram, não pela conversa.** Em conversa
   privada os dois números são iguais, mas o id de um grupo pertence ao grupo:
@@ -287,6 +292,15 @@ Três coisas de propósito:
 - **Vídeo acima de 50 MB não sobe.** É o teto do Bot API. Nesse caso o bot
   manda o caminho no servidor em vez de falhar calado — acontece com cortes
   longos 16:9, não com os verticais de ~24 MB.
+- **O bot fala sem ser perguntado.** Ele avisa ao mudar de fase, a cada 5 cenas
+  desenhadas e, de qualquer jeito, no mínimo a cada 5 minutos. Esse mínimo
+  existe porque o render final passa ~12 minutos sem imprimir uma linha
+  sequer, e silêncio desse tamanho parece que travou. Duas ressalvas sobre o
+  que ele mostra: a porcentagem é **estimativa**, calculada com os pesos
+  medidos de cada fase, e não uma contagem do que falta — por isso vem com `~`.
+  E abaixo de ~8% concluído não aparece tempo restante, e sim `calculando ⏱`:
+  com 3% feito, poucos segundos de variação mudam a estimativa em dez minutos,
+  então um número ali seria confiante e errado. Não é bug.
 
 ## Documentação
 

@@ -13,6 +13,8 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
+from loguru import logger
+
 NICHES_DIR = Path(__file__).resolve().parent.parent / "niches"
 
 # Aspect ratios the render engine accepts (app/models/schema.py VideoAspect).
@@ -267,8 +269,12 @@ def load_niche(niche_id: str, niches_dir: Path | None = None) -> Niche:
     if not path.is_file():
         available = ", ".join(n.id for n in load_all_niches(directory)) or "none"
         raise NicheError(f"unknown niche {niche_id!r}; available: {available}")
-    with path.open("rb") as handle:
-        data = tomllib.load(handle)
+    try:
+        with path.open("rb") as handle:
+            data = tomllib.load(handle)
+    except (tomllib.TOMLDecodeError, OSError) as exc:
+        # Reaches a chat as a reply, so it must be a NicheError like the rest.
+        raise NicheError(f"{path}: {exc}") from exc
     niche = parse_niche(data, source=str(path))
     if niche.id != niche_id:
         raise NicheError(f"{path}: [niche].id is {niche.id!r}, expected {niche_id!r}")
@@ -282,10 +288,14 @@ def load_all_niches(niches_dir: Path | None = None) -> list[Niche]:
         return []
     packs: list[Niche] = []
     for path in sorted(directory.glob("*.toml")):
-        with path.open("rb") as handle:
-            data = tomllib.load(handle)
+        # Parsing is inside the guard too: a pack with a typo in its TOML is
+        # just as broken as one that fails validation, and listing the others
+        # is more useful than refusing to list any.
         try:
+            with path.open("rb") as handle:
+                data = tomllib.load(handle)
             packs.append(parse_niche(data, source=str(path)))
-        except NicheError:
+        except (NicheError, tomllib.TOMLDecodeError, OSError) as exc:
+            logger.warning(f"skipping niche pack {path.name}: {exc}")
             continue
     return sorted(packs, key=lambda n: n.score, reverse=True)

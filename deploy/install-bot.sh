@@ -25,9 +25,9 @@ except BotError as exc:
     print(exc, file=sys.stderr)
     raise SystemExit(1)
 if not chats:
-    print('telegram_allowed_chats is empty: the bot would answer no one.', file=sys.stderr)
-    print('Message the bot once, then add the id it replies with:', file=sys.stderr)
-    print('  python -m growth config --telegram-chat <id>', file=sys.stderr)
+    print('telegram_allowed_users is empty: the bot would answer no one.', file=sys.stderr)
+    print('Message the bot once, then add the user id it replies with:', file=sys.stderr)
+    print('  python -m growth config --telegram-user <id>', file=sys.stderr)
     raise SystemExit(1)
 "; then
     exit 1
@@ -86,4 +86,5 @@ echo "  logs:    journalctl -u $UNIT -f"
 echo "  restart: sudo systemctl restart $UNIT"
 echo "  remove:  sudo systemctl disable --now $UNIT"
 echo
-echo "Send /start to the bot to check it answers."
+echo "Send /start to the bot to check it answers; it replies with the command menu."
+echo "During a render the bot reports progress on its own, so a quiet stretch is not a failure."

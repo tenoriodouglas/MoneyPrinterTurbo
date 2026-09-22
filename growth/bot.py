@@ -24,7 +24,7 @@ import requests
 from loguru import logger
 
 from growth.niche import NicheError, load_all_niches, load_niche
-from growth.plan import PlanError, create_plan
+from growth.plan import PlanError, create_plan, scene_count
 from growth.produce import ProduceError, produce
 from growth.progress import ProgressTracker
 from growth.review import FAIL, review_all
@@ -76,6 +76,10 @@ class RenderJob:
     last_report: float = field(default_factory=time.monotonic)
     # Scene count at the last update, so one is never sent twice.
     scenes_reported: int = 0
+    # Set by the log watcher, cleared by the thread that does the talking.
+    report_pending: bool = False
+    # Rendering is done; the files are being uploaded, which also takes a while.
+    delivering: bool = False
 
     @property
     def elapsed_seconds(self) -> float:
@@ -107,6 +111,11 @@ class TelegramClient:
             f"{self._base}/{method}", data=payload, timeout=http_timeout
         )
         body = response.json()
+        # A proxy or captive portal can answer with valid JSON that is not an
+        # object. Left alone, .get() would raise AttributeError past every
+        # handler that expects a BotError, and kill the thread that called it.
+        if not isinstance(body, dict):
+            raise BotError(f"{method}: the api returned {type(body).__name__}, not an object")
         if not body.get("ok"):
             # The description names the cause; the token must never be echoed.
             raise BotError(f"{method}: {body.get('description', 'unknown error')}")
@@ -191,48 +200,65 @@ class GrowthBot:
         )
 
     def _progress_report(self, job: RenderJob) -> None:
-        """Tell the chat where the render is, and reset the heartbeat clock."""
-        job.last_report = time.monotonic()
-        self._say(
+        """Tell the chat where the render is, and reset the heartbeat clock.
+
+        The clock is reset only on a message that actually went out. Resetting
+        on the attempt would let one failed send buy another five minutes of
+        silence, which is the thing this is here to prevent.
+        """
+        progress = job.tracker.snapshot()
+        sent = self._say(
             job.chat_id,
-            f"⏳ {job.tracker.progress.describe(job.elapsed_seconds)}\n"
-            f"🕐 já faz {job.elapsed_minutes:.0f} min",
+            f"⏳ {progress.describe()}\n🕐 já faz {job.elapsed_minutes:.0f} min",
         )
+        if sent:
+            job.last_report = time.monotonic()
 
     def _heartbeat(self, job: RenderJob, done: threading.Event) -> None:
-        """Speak up when a phase goes quiet for too long.
+        """Do all the talking for a running render, on a thread of its own.
 
-        Phase changes alone would leave a twelve-minute gap during the final
-        render, which is exactly when someone starts wondering if it died.
+        Two reasons it, and not the log watcher, sends every update. A stage
+        can go twelve minutes without printing a line, and only a clock
+        notices that. And the watcher runs on the thread draining the engine's
+        stdout: a slow Telegram there stops that pipe being read, which stalls
+        the engine and eats into its own timeout.
         """
         while not done.wait(HEARTBEAT_TICK):
-            if time.monotonic() - job.last_report >= HEARTBEAT_SECONDS:
-                self._progress_report(job)
+            try:
+                due = time.monotonic() - job.last_report >= HEARTBEAT_SECONDS
+                if job.report_pending or due:
+                    job.report_pending = False
+                    self._progress_report(job)
+            except Exception:  # this thread dying is the silence it prevents
+                logger.exception("progress heartbeat failed")
 
     def _run_job(self, job: RenderJob) -> None:
         """Render, then report. Runs on its own thread, so nothing here may
         raise: an escaping exception would leave the chat waiting forever for
         a message that never comes."""
         def watch(line: str) -> None:
-            changed = job.tracker.feed(line)
-            progress = job.tracker.progress
-            if changed:
-                if progress.phase in NOTABLE_PHASES:
-                    self._progress_report(job)
+            """Note what the log said. Never sends: see _heartbeat."""
+            if job.tracker.feed(line):
+                if job.tracker.snapshot().phase in NOTABLE_PHASES:
+                    job.report_pending = True
                 return
-            # Not a phase change, so the only news worth sending is another
-            # handful of finished scenes.
-            done = progress.scenes_done
-            if done and done % SCENES_PER_REPORT == 0 and done != job.scenes_reported:
-                job.scenes_reported = done
-                self._progress_report(job)
+            # Not a stage change, so the only news is another few scenes.
+            drawn = job.tracker.snapshot().scenes_done
+            if drawn >= job.scenes_reported + SCENES_PER_REPORT:
+                job.scenes_reported = drawn
+                job.report_pending = True
 
         done = threading.Event()
-        threading.Thread(
-            target=self._heartbeat, args=(job, done), daemon=True
-        ).start()
         try:
+            # Started inside the guard: if the machine is out of threads, the
+            # finally below still frees the queue. Leaving it outside would
+            # wedge the bot on a job that is not running.
+            threading.Thread(
+                target=self._heartbeat, args=(job, done), daemon=True
+            ).start()
             result = self._runner(job.niche_id, job.count, on_line=watch)
+            done.set()
+            job.delivering = True
             self._report(job, result)
         except (PlanError, ProduceError, NicheError) as exc:
             self._say(
@@ -284,11 +310,14 @@ class GrowthBot:
                 f"⚠️ Não consegui enviar {html.escape(path.name)}: {html.escape(str(exc))}",
             )
 
-    def _say(self, chat_id: int, text: str) -> None:
+    def _say(self, chat_id: int, text: str) -> bool:
+        """Send, and say whether it arrived. Callers decide what a loss costs."""
         try:
             self.client.send_message(chat_id, text)
+            return True
         except (BotError, requests.RequestException) as exc:
             logger.warning(f"could not reply to {chat_id}: {exc}")
+            return False
 
     # -- commands ----------------------------------------------------------
 
@@ -312,9 +341,9 @@ class GrowthBot:
         for pack in packs:
             low, high = pack.economics.rpm_range
             lines.append(
-                f"• <code>{pack.id}</code>\n"
+                f"• <code>{html.escape(pack.id)}</code>\n"
                 f"   💰 RPM ${low:.2f}-${high:.2f} · 🥊 concorrência "
-                f"{pack.economics.competition}"
+                f"{html.escape(pack.economics.competition)}"
             )
         lines.append("\nPara usar: <code>/run &lt;nicho&gt;</code>")
         return "\n".join(lines)
@@ -339,29 +368,31 @@ class GrowthBot:
             if self._job is not None:
                 job = self._job
                 return (
-                    f"⏳ Calma aí! Já estou fazendo <code>{job.niche_id}</code> "
+                    f"⏳ Calma aí! Já estou fazendo <code>{html.escape(job.niche_id)}</code> "
                     f"há {job.elapsed_minutes:.0f} min.\n"
-                    f"{job.tracker.progress.describe(job.elapsed_seconds)}\n\n"
+                    f"{job.tracker.snapshot().describe()}\n\n"
                     "Faço um de cada vez pra não travar a máquina 🙂"
                 )
-            # One image per scene, so the count is known before it starts.
-            scenes = 0
-            if niche.video.target_seconds:
-                scenes = round(niche.video.target_seconds / max(niche.video.clip_duration, 1))
+            # One image per scene, and plan decides how many. Asking it keeps
+            # the chat's denominator equal to the number really drawn.
             job = RenderJob(
                 niche_id=niche.id,
                 count=count,
                 chat_id=chat_id,
-                tracker=ProgressTracker(scenes_total=scenes),
+                tracker=ProgressTracker(scenes_total=scene_count(niche)),
             )
             self._job = job
 
-        threading.Thread(target=self._run_job, args=(job,), daemon=True).start()
-        return (
-            f"▶️ Beleza! Fazendo {count} vídeo(s) de <code>{niche.id}</code> 🎬\n"
+        # Acknowledged before the thread starts: begun first, the render can
+        # report a stage above the message that says it started.
+        self._say(
+            chat_id,
+            f"▶️ Beleza! Fazendo {count} vídeo(s) de <code>{html.escape(niche.id)}</code> 🎬\n"
             f"⏱ Leva uns {20 * count} min.\n"
-            "Vou te avisando aqui a cada etapa — ou pergunte /status quando quiser 😉"
+            "Vou te avisando aqui a cada etapa — ou pergunte /status quando quiser 😉",
         )
+        threading.Thread(target=self._run_job, args=(job,), daemon=True).start()
+        return ""
 
     def _cmd_status(self, _: int, __: list[str]) -> str:
         with self._lock:
@@ -371,9 +402,15 @@ class GrowthBot:
                 "😴 Tudo parado por aqui, nada rodando.\n"
                 "Manda um <code>/run &lt;nicho&gt;</code> que eu começo 🎬"
             )
+        if job.delivering:
+            return (
+                f"📤 <b>{html.escape(job.niche_id)}</b> — render pronto, "
+                f"enviando os vídeos agora.\n"
+                f"🕐 rodando há {job.elapsed_minutes:.0f} min"
+            )
         return (
             f"🎬 <b>{html.escape(job.niche_id)}</b> — {job.count} vídeo(s)\n"
-            f"{job.tracker.progress.describe(job.elapsed_seconds)}\n"
+            f"{job.tracker.snapshot().describe()}\n"
             f"🕐 rodando há {job.elapsed_minutes:.0f} min"
         )
 

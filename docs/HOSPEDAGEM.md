@@ -35,6 +35,12 @@ diferente. Um vídeo real de 91 s, na mesma máquina de 4 vCPU:
 | Combinação + render final | ~12 min | **é aqui que a CPU trabalha** |
 | **Total** | **~17 min** | com 8 cenas |
 
+Esses ~12 min são quase mudos no log: entre o começo da combinação e o arquivo
+pronto o engine praticamente não imprime nada, e silêncio desse tamanho é
+indistinguível de um travamento. Por isso o bot do Telegram se manifesta
+sozinho a cada 5 minutos, com a fase atual e um percentual aproximado — a
+configuração dele está em `COMECE-AQUI.md`, seção "Pelo Telegram".
+
 Medido na fase de combinação: **pico de 586 MB de RAM, 243% de CPU** (ou seja,
 usa cerca de 2,4 núcleos). Arquivo final de 24 MB.
 

@@ -248,6 +248,20 @@ def assign_voices(briefs: list[Brief], niche: Niche, seed: int | None = None) ->
         brief.voice_name = voices[position % len(voices)]
 
 
+def scene_count(niche: Niche) -> int:
+    """How many images a generating source will draw for one video.
+
+    The bot counts them off in the chat, so its denominator has to be the
+    number this module actually asks for, not a second guess at it. Clip
+    length is jittered per task, so the shorter of the two is used: it asks
+    for the most clips, and a counter that reaches its total early reads
+    better than one that runs past it.
+    """
+    if not niche.video.target_seconds:
+        return 0
+    return math.ceil(niche.video.target_seconds / max(niche.video.clip_duration, 1)) + 1
+
+
 def _build_terms(brief: Brief, niche: Niche, clip_seconds: int) -> list[str]:
     """Choose how many search terms a task carries.
 
