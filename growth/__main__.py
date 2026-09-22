@@ -125,15 +125,30 @@ def _cmd_doctor(args: argparse.Namespace) -> int:
     return 0
 
 
+def _planned_line(plan: dict, theme: str | None) -> str:
+    """The line both `plan` and `run` print once briefs exist.
+
+    The theme is echoed so a terminal recording shows which theme produced
+    which plan.
+    """
+    subject = (theme or "").strip()
+    suffix = f" (theme: {subject})" if subject else ""
+    return f"planned {plan['count']} videos for {plan['niche_name']}{suffix}"
+
+
 def _cmd_plan(args: argparse.Namespace) -> int:
+    # Read like the other optional flags: this stays safe if the namespace
+    # ever reaches here from a caller that does not define --theme.
+    theme = getattr(args, "theme", None)
     plan = create_plan(
         args.niche,
         count=args.count,
         seed=args.seed,
         aspect=args.aspect,
         paragraphs=args.paragraphs,
+        theme=theme,
     )
-    print(f"planned {plan['count']} videos for {plan['niche_name']}")
+    print(_planned_line(plan, theme))
     for number, brief in enumerate(plan["briefs"], start=1):
         print(f"  {number}. [{brief['angle'][:28]}] {brief['subject']}")
     print(f"\nplan:     {plan['plan_file']}")
@@ -160,14 +175,16 @@ def _cmd_produce(args: argparse.Namespace) -> int:
 
 
 def _cmd_run(args: argparse.Namespace) -> int:
+    theme = getattr(args, "theme", None)
     plan = create_plan(
         args.niche,
         count=args.count,
         seed=args.seed,
         aspect=args.aspect,
         paragraphs=args.paragraphs,
+        theme=theme,
     )
-    print(f"planned {plan['count']} videos for {plan['niche_name']}")
+    print(_planned_line(plan, theme))
     result = produce(
         Path(plan["plan_file"]).parent,
         stop_at="video",
@@ -305,6 +322,15 @@ def main(argv: list[str] | None = None) -> int:
         default=None,
         help="script length in paragraphs, 1-10; raise it for long-form",
     )
+    planning.add_argument(
+        "--theme",
+        default=None,
+        metavar="TEXT",
+        help=(
+            "narrow this batch to one subject, in your own words; the pack "
+            "still supplies the style, the angles and the guardrails"
+        ),
+    )
     planning.set_defaults(func=_cmd_plan)
 
     producing = subparsers.add_parser("produce", help="render an existing plan directory")
@@ -327,6 +353,15 @@ def main(argv: list[str] | None = None) -> int:
     running.add_argument("--seed", type=int, default=None)
     running.add_argument("--aspect", choices=["9:16", "16:9", "1:1"], default=None)
     running.add_argument("--paragraphs", type=int, default=None)
+    running.add_argument(
+        "--theme",
+        default=None,
+        metavar="TEXT",
+        help=(
+            "narrow this batch to one subject, in your own words; the pack "
+            "still supplies the style, the angles and the guardrails"
+        ),
+    )
     running.add_argument("--timeout", type=int, default=6 * 60 * 60)
     running.add_argument(
         "--quiet", action="store_true", help="hide the engine's render log"
