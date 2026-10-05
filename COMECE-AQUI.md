@@ -429,7 +429,7 @@ deploy/install-bot.sh
 
 Comandos: `/start` e `/help` (os dois mostram o menu), `/niches`,
 `/run <nicho> [n]`, `/tema <texto livre>` (um vídeo), `/status`,
-`/review [n]` (n entre 1 e 20), `/last [n]`.
+`/review [n]` (n entre 1 e 20), `/last [n]`, `/disk`.
 
 Quatro coisas de propósito:
 
@@ -451,6 +451,28 @@ Quatro coisas de propósito:
   E abaixo de ~8% concluído não aparece tempo restante, e sim `calculando ⏱`:
   com 3% feito, poucos segundos de variação mudam a estimativa em dez minutos,
   então um número ali seria confiante e errado. Não é bug.
+
+### O vídeo some do servidor depois de enviado
+
+Para a máquina não encher sozinha, **o bot apaga o vídeo entregue e o diretório
+da tarefa assim que o Telegram confirma o upload**, e diz na conversa quantos MB
+liberou. `/disk` mostra a qualquer momento quanto as pastas de vídeo ocupam.
+
+A parte que assusta, dita sem rodeio: **um vídeo que você não salvou não está
+mais no servidor depois de chegar no celular.** O Telegram passa a ser a única
+cópia — então salve na hora o que prestar. Duas exceções, de propósito: se o
+envio falhar, ou se o arquivo passar de 50 MB e só o caminho for mandado, nada é
+apagado, porque aí quem tem a única cópia é o servidor.
+
+O `/review` continua respondendo sobre vídeo já apagado. O veredito é medido no
+fim do render, enquanto o arquivo ainda existe, e fica guardado no ledger.
+
+Para manter os arquivos no servidor, é um campo só:
+
+```toml
+[app]
+delete_after_send = false
+```
 
 ## Documentação
 

@@ -60,6 +60,21 @@ SCENES_PER_REPORT = 5
 # The checks call three providers; a slow one must not hang the thread.
 DOCTOR_TIMEOUT = 120
 
+# Config key, in the [app] table of config.toml, that keeps delivered videos on
+# the server instead of deleting them:
+#
+#     [app]
+#     delete_after_send = false
+#
+# Default on. A render leaves far more behind than the file that gets sent —
+# the task directory keeps the intermediate cut, the narration, the subtitles
+# and every generated scene — and on a free-tier disk a week of that fills the
+# machine. Turning it off is for a server used as the archive; the copy in the
+# chat is the archive otherwise.
+DELETE_AFTER_SEND_KEY = "delete_after_send"
+# Anything else, including a missing key, reads as on.
+_FALSE_WORDS = frozenset({"0", "false", "no", "off", "nao", "não"})
+
 
 class BotError(RuntimeError):
     """Raised when the bot cannot start or cannot reach Telegram."""
@@ -103,6 +118,36 @@ PT_FLAGS = frozenset({"pt", "pt-br", "ptbr", "br", "portugues", "português"})
 # subject, and both waste twenty minutes of render.
 MIN_THEME_CHARS = 3
 MAX_THEME_CHARS = 200
+
+
+def _as_bool(value: Any, default: bool = True) -> bool:
+    """Read a config flag. TOML gives a real bool; a hand-typed "false" is a
+    string, and treating that as on would delete files the operator kept."""
+    if value is None:
+        return default
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, (int, float)):
+        return bool(value)
+    return str(value).strip().lower() not in _FALSE_WORDS
+
+
+def _mb(size: float) -> str:
+    """Bytes as megabytes. Disk talk in bytes is unreadable on a phone."""
+    return f"{size / 1024 / 1024:.1f}"
+
+
+def _short_path(name: str) -> str:
+    """A storage root as the docs name it: storage/tasks, not its full path.
+
+    disk_report keys are absolute, which on a phone wraps over two lines and
+    repeats the same prefix on each row. A path outside the repo is left
+    whole, because then the prefix is the news.
+    """
+    try:
+        return str(Path(name).relative_to(REPO_ROOT))
+    except ValueError:
+        return name
 
 
 @dataclass(frozen=True)
@@ -200,17 +245,23 @@ class TelegramClient:
     def send_message(self, chat_id: int, text: str) -> None:
         self._call("sendMessage", chat_id=chat_id, text=text, parse_mode="HTML")
 
-    def send_video(self, chat_id: int, path: Path, caption: str = "") -> None:
-        """Upload a rendered video, or say why it could not be uploaded."""
+    def send_video(self, chat_id: int, path: Path, caption: str = "") -> bool:
+        """Upload a rendered video. True only when the bytes themselves went.
+
+        False means the chat was told where the file is instead of being given
+        it, which leaves the copy on the server the only one in existence. The
+        caller needs to tell the two apart before deleting anything.
+        """
         size = path.stat().st_size
         if size > MAX_UPLOAD_BYTES:
             self.send_message(
                 chat_id,
                 f"📦 {html.escape(path.name)} tem {size / 1024 / 1024:.0f} MB e o "
                 f"telegram só deixa um bot enviar {MAX_UPLOAD_BYTES // 1024 // 1024} MB.\n"
-                f"Ele está no servidor em <code>{html.escape(str(path))}</code>",
+                f"Ele está no servidor em <code>{html.escape(str(path))}</code>\n"
+                "📥 Esse eu guardo — baixa por SSH quando puder.",
             )
-            return
+            return False
         with path.open("rb") as handle:
             response = requests.post(
                 f"{self._base}/sendVideo",
@@ -225,6 +276,7 @@ class TelegramClient:
         body = response.json()
         if not body.get("ok"):
             raise BotError(f"sendVideo: {body.get('description', 'unknown error')}")
+        return True
 
 
 class GrowthBot:
@@ -243,6 +295,9 @@ class GrowthBot:
         self._runner = runner or self._render
         self._job: RenderJob | None = None
         self._lock = threading.Lock()
+        # The key that stops the deleting is worth saying once, with the first
+        # delete. Repeating it on every batch would train him to skip the line.
+        self._explained_deletion = False
 
     # -- rendering ---------------------------------------------------------
 
@@ -373,11 +428,25 @@ class GrowthBot:
                 f"{total} vídeo(s) saiu.{self._theme_line(job)}\n\n"
                 + self._why_it_failed(result),
             )
+        delivered: list[dict[str, Any]] = []
         for record in result.get("records", []):
             if record.get("status") != "succeeded":
                 continue
-            for file_path in record.get("files", []):
+            # A list, not a generator: every file is sent before the row is
+            # judged, so one that cannot go does not cancel the ones after it.
+            sent = [
                 self._send_video(job.chat_id, Path(file_path), record.get("caption", ""))
+                for file_path in record.get("files", [])
+            ]
+            # A row is only delivered when all of it is. Deleting a task
+            # directory because one of its two cuts arrived would take the
+            # other one with it.
+            if sent and all(sent):
+                delivered.append(record)
+
+        # Last, after every upload and after the summary above: whatever goes
+        # wrong in here, the chat has already been told the batch is done.
+        self._purge_delivered(job.chat_id, delivered)
 
     def _missing_config(self, niche: Any) -> str:
         """Why this pack cannot render yet, or an empty string if it can.
@@ -440,16 +509,85 @@ class GrowthBot:
         lines.append("Depois de ajustar, <code>/doctor</code> confere sem gastar render.")
         return "\n\n".join(lines)
 
-    def _send_video(self, chat_id: int, path: Path, caption: str) -> None:
+    def _send_video(self, chat_id: int, path: Path, caption: str) -> bool:
+        """Send one video, and say whether its bytes reached the chat.
+
+        Only a True here may be followed by a delete. A send that failed, and
+        a file too big to upload that went out as a path, both leave the
+        server holding the only copy — and an unknown answer from a client
+        that reports nothing is read as a no, because a file kept by mistake
+        costs disk and a file deleted by mistake is gone.
+        """
         if not path.is_file():
-            return
+            return False
         try:
-            self.client.send_video(chat_id, path, caption)
+            return bool(self.client.send_video(chat_id, path, caption))
         except (BotError, requests.RequestException) as exc:
             self._say(
                 chat_id,
                 f"⚠️ Não consegui enviar {html.escape(path.name)}: {html.escape(str(exc))}",
             )
+            return False
+
+    def _deletion_enabled(self) -> bool:
+        """Whether a delivered video may be taken off the server.
+
+        Read from disk every time, not from the process's snapshot: app/config
+        caches at import and this process runs for days, so a value changed on
+        the server would otherwise never be seen without a restart.
+        """
+        return _as_bool((load_app_config() or {}).get(DELETE_AFTER_SEND_KEY))
+
+    def _purge_delivered(self, chat_id: int, records: list[dict[str, Any]]) -> None:
+        """Remove what the chat already has, and say how much that freed.
+
+        Nothing here may raise: it runs on the render thread, after the chat
+        has been promised a finished batch.
+        """
+        if not records or not self._deletion_enabled():
+            return
+        try:
+            # Imported on use: a cleanup module that is missing or broken must
+            # cost disk, not the delivery of the videos themselves.
+            from growth.cleanup import purge_delivered
+        except ImportError as exc:
+            logger.warning(f"keeping the files, cleanup is unavailable: {exc}")
+            return
+
+        freed = 0
+        purged = 0
+        for record in records:
+            try:
+                freed += int(purge_delivered(record) or 0)
+                purged += 1
+            except Exception:  # one unreadable row must not strand the rest
+                logger.exception("could not purge a delivered record")
+        if not purged:
+            # Claiming a delete that did not happen is worse than saying
+            # nothing: the disk keeps filling while the chat says it is not.
+            self._say(
+                chat_id,
+                "⚠️ Entreguei tudo, mas não consegui apagar nada do servidor.\n"
+                "Veja o espaço com /disk.",
+            )
+            return
+        self._say(chat_id, self._freed_message(freed, purged))
+
+    def _freed_message(self, freed: int, count: int) -> str:
+        """Account for the delete. Silence here is indistinguishable from a
+        bug the day he goes looking for a file and finds the folder empty."""
+        text = (
+            f"🧹 Apaguei do servidor {count} vídeo(s) já entregue(s) aqui "
+            f"e liberei {_mb(freed)} MB."
+        )
+        if not self._explained_deletion:
+            self._explained_deletion = True
+            text += (
+                "\n💾 Eles continuam aqui no telegram. Pra guardar também no "
+                f"servidor, põe <code>{html.escape(DELETE_AFTER_SEND_KEY)} = false</code> "
+                "em <code>[app]</code> no config.toml."
+            )
+        return text
 
     def _say(self, chat_id: int, text: str) -> bool:
         """Send, and say whether it arrived. Callers decide what a loss costs."""
@@ -471,7 +609,8 @@ class GrowthBot:
             "🩺 /doctor [nicho] — conferir se está tudo configurado\n"
             "🗂 /niches — os packs e quanto rendem\n"
             "🔍 /review — conferir os vídeos antes de postar\n"
-            "📤 /last [n] — reenviar os vídeos mais recentes\n\n"
+            "📤 /last [n] — reenviar os vídeos mais recentes\n"
+            "💾 /disk — quanto espaço os vídeos estão ocupando\n\n"
             "Comece com <code>/run ufo-sightings</code> 🛸\n"
             "Vou avisando o progresso por aqui e mando o vídeo quando ficar pronto 😉"
         )
@@ -682,10 +821,72 @@ class GrowthBot:
         reviews = review_all(limit=count)
         if not reviews:
             return "📭 Ainda não produzi nada. Manda um <code>/run</code> 🎬"
-        self._say(chat_id, f"📤 Enviando {min(count, len(reviews))} vídeo(s)…")
-        for item in reviews[-count:]:
+
+        # The ledger keeps its rows after a delivered file is deleted, so a
+        # row here is not a file. Without this the chat got "enviando 3
+        # vídeo(s)" and then nothing at all, which reads as a broken bot.
+        wanted = reviews[-count:]
+        present = [item for item in wanted if item.path.is_file()]
+        if not present:
+            return (
+                f"🗑 Os {len(wanted)} vídeo(s) mais recentes já saíram do servidor: "
+                "eu apago cada um depois de te entregar aqui, senão o disco enche.\n"
+                "📱 Eles continuam nesta conversa — é só rolar pra cima.\n"
+                f"💾 Pra eu parar de apagar, põe <code>{html.escape(DELETE_AFTER_SEND_KEY)} "
+                "= false</code> em <code>[app]</code> no config.toml."
+            )
+
+        self._say(chat_id, f"📤 Enviando {len(present)} vídeo(s)…")
+        for item in present:
             self._send_video(chat_id, item.path, item.subject)
+        missing = len(wanted) - len(present)
+        if missing:
+            self._say(
+                chat_id,
+                f"🗑 Outro(s) {missing} já tinha(m) sido apagado(s) do servidor "
+                "depois de entregue(s) — rola pra cima que eles estão aqui.",
+            )
         return ""
+
+    def _cmd_disk(self, _: int, __: list[str]) -> str:
+        """What the renders are holding, root by root.
+
+        A free-tier disk fills in a week of batches, and the machine gives no
+        warning before it does: the next render simply fails somewhere in the
+        middle. Asking from the phone is the only check that gets made.
+        """
+        try:
+            # Imported on use, as in _purge_delivered.
+            from growth.cleanup import disk_report
+
+            rows = {
+                str(name): float(size)
+                for name, size in (disk_report() or {}).items()
+                # A bool is an int; a flag in the report is not a byte count.
+                if isinstance(size, (int, float)) and not isinstance(size, bool)
+            }
+        except Exception as exc:
+            logger.exception("disk report failed")
+            return f"💥 Não consegui medir o disco:\n<code>{html.escape(str(exc))}</code>"
+
+        total = rows.pop("total", None)
+        if total is None:
+            total = sum(rows.values())
+        if not rows and not total:
+            return "💾 Nada ocupando espaço ainda. Manda um <code>/run</code> 🎬"
+
+        lines = ["💾 <b>Espaço ocupado pelos vídeos</b>\n"]
+        for name, size in sorted(rows.items(), key=lambda row: -row[1]):
+            lines.append(f"• <code>{html.escape(_short_path(name))}</code> — {_mb(size)} MB")
+        lines.append(f"\n📦 <b>Total: {_mb(total)} MB</b>")
+        if self._deletion_enabled():
+            lines.append("🧹 Apago cada vídeo depois de te entregar ele aqui.")
+        else:
+            lines.append(
+                "📥 Guardando tudo: está com "
+                f"<code>{html.escape(DELETE_AFTER_SEND_KEY)} = false</code> no config.toml."
+            )
+        return "\n".join(lines)
 
     def _cmd_doctor(self, chat_id: int, args: list[str]) -> str:
         """Run the preflight checks from the chat.
@@ -768,6 +969,7 @@ class GrowthBot:
         "/doctor": "_cmd_doctor",
         "/review": "_cmd_review",
         "/last": "_cmd_last",
+        "/disk": "_cmd_disk",
     }
 
     def handle(self, message: dict[str, Any]) -> None:

@@ -158,6 +158,27 @@ def run_batch(
         raise ProduceError(f"could not parse batch summary: {exc}") from exc
 
 
+def _verdicts(record: dict[str, Any]) -> list[dict[str, Any]]:
+    """Review the files this row produced, while they are still on disk.
+
+    Duration and black frames can only be read from the file, and finished
+    videos are deleted once they reach the phone. Measuring here is what lets
+    a review answer for a video the box no longer holds.
+
+    Costs one ffprobe plus one decode pass per video (growth.review
+    .black_fraction), seconds against a render that takes minutes.
+    """
+    # Imported here rather than at module scope: growth.review reads
+    # LEDGER_PATH from this module, so the two cannot import each other early.
+    from growth.review import review_record
+
+    try:
+        return [review.as_dict() for review in review_record(record)]
+    except Exception:  # a review that fails must not cost the ledger row
+        logger.exception("could not review the rendered files")
+        return []
+
+
 def collect(plan_file: Path, summary: dict[str, Any]) -> list[dict[str, Any]]:
     """Join the render summary back to its briefs and file the outputs."""
     plan = json.loads(plan_file.read_text(encoding="utf-8"))
@@ -192,27 +213,31 @@ def collect(plan_file: Path, summary: dict[str, Any]) -> list[dict[str, Any]]:
             shutil.copy2(source_path, target)
             filed.append(str(target))
 
-        records.append(
-            {
-                "niche_id": plan["niche_id"],
-                "subject": brief.get("subject", ""),
-                "angle": brief.get("angle", ""),
-                "hook": brief.get("hook", ""),
-                "call_to_action": brief.get("call_to_action", ""),
-                "caption": _caption(brief, hashtags),
-                "hashtags": hashtags,
-                "platforms": list(niche.platforms),
-                "voice_name": brief.get("voice_name", ""),
-                "status": task.get("status", "unknown"),
-                "error": task.get("error"),
-                "failed_stage": task.get("failed_stage"),
-                "task_id": task.get("task_id", ""),
-                "files": filed,
-                "subtitle_path": result.get("subtitle_path", ""),
-                "produced_at": datetime.now(timezone.utc).isoformat(),
-                "published": False,
-            }
-        )
+        record: dict[str, Any] = {
+            "niche_id": plan["niche_id"],
+            "subject": brief.get("subject", ""),
+            "angle": brief.get("angle", ""),
+            "hook": brief.get("hook", ""),
+            "call_to_action": brief.get("call_to_action", ""),
+            "caption": _caption(brief, hashtags),
+            "hashtags": hashtags,
+            "platforms": list(niche.platforms),
+            "voice_name": brief.get("voice_name", ""),
+            "status": task.get("status", "unknown"),
+            "error": task.get("error"),
+            "failed_stage": task.get("failed_stage"),
+            "task_id": task.get("task_id", ""),
+            "files": filed,
+            "subtitle_path": result.get("subtitle_path", ""),
+            # One verdict per entry in files, measured below before the file
+            # can be deleted; empty when nothing was filed.
+            "reviews": [],
+            "produced_at": datetime.now(timezone.utc).isoformat(),
+            "published": False,
+        }
+        if filed:
+            record["reviews"] = _verdicts(record)
+        records.append(record)
     return records
 
 

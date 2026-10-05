@@ -91,7 +91,12 @@ local deixa de ser sobre velocidade. Passa a ser sobre disponibilidade.
 - **Compilador**: não é preciso. Toda dependência tem wheel pronta, então o
   bootstrap não instala `build-essential` nem `python3-dev` — esse conjunto são
   ~450 MB de download e 1,5 GB em disco, à toa.
-- **Disco**: cache de material + saídas. 30–50 GB dá conta com folga.
+- **Disco**: a instalação medida aqui dá **~1,5 GB** (1,1 GB são o `.venv`), e
+  uma tarefa em andamento tem pico de ~60 MB. Com a limpeza automática, o que
+  fica parado deixa de crescer com o número de vídeos: **10 GB sobram**. Os
+  30–50 GB que esta linha pedia antes eram dimensionados para acúmulo sem fim,
+  e continuam sendo a conta certa se o lote roda pelo timer — que não passa
+  pelo bot e portanto não apaga nada. Ver "Limpeza de disco".
 - **Banda**: download de material é entrada (grátis em todo provedor); upload
   dos vídeos é ~5 MB cada.
 
@@ -155,13 +160,41 @@ serem revistos. Rode `python -m growth review` antes de subir qualquer coisa.
 
 ## Limpeza de disco, que passa despercebida
 
-Cada vídeo final tem ~24 MB, e o diretório da tarefa guarda as imagens
-geradas, os clipes intermediários e o áudio — bem mais que isso. Dois vídeos
-por dia enchem alguns GB por mês.
+Medido neste repositório: **76 MB em `storage/tasks/` contra 27 MB em
+`storage/growth/out/`**. O diretório de trabalho pesa quase três vezes o que foi
+entregue, e o motivo está dentro dele — cada tarefa guarda **`combined-1.mp4` e
+`final-1.mp4`, duas cópias de praticamente o mesmo vídeo**, mais `audio.mp3`,
+`subtitle.srt`, `script.json` e, nos packs ilustrados, cada cena `.png` gerada
+junto do clipe dela. No vídeo de UFO de 91 s isso dá 59 MB de tarefa para 24 MB
+de vídeo entregue.
 
-Nos 200 GB da Oracle isso demora a incomodar; nos 40 GB de um VPS pequeno, não.
-Limpe as tarefas antigas periodicamente — as saídas finais já estão copiadas
-para `storage/growth/out/`:
+Daí a consequência que decide o desenho: **apagar só o vídeo entregue recupera
+cerca de um quarto do que está parado.** O resto é a tarefa, e por isso o
+diretório dela vai junto.
+
+Quando o vídeo sai pelo Telegram, o bot já faz isso sozinho: apaga o render
+entregue **e** o diretório da tarefa, mas só **depois que o Telegram confirma o
+upload** — nunca antes, porque apagar sem confirmação troca disco cheio por
+vídeo perdido. Envio que falhou e arquivo acima de 50 MB, que não sobe, são
+justamente os que ele preserva. Ele diz na conversa quantos MB liberou, e
+`/disk` responde a qualquer momento quanto as duas pastas estão ocupando. Para
+guardar tudo no servidor, `delete_after_send = false` em `[app]` no
+`config.toml`.
+
+**O comando manual continua necessário**, e não por teimosia: a limpeza é
+disparada pela entrega, então o que nunca é entregue nunca é apagado. São dois
+casos:
+
+1. **Render que falhou.** Não houve upload, logo não houve confirmação, e o
+   diretório fica inteiro — justamente quando ele não serve para mais nada.
+2. **O lote diário.** O `deploy/install-timer.sh` roda `python -m growth run`,
+   não o bot: grava em `storage/growth/out/` e pronto. Nenhum upload, nenhuma
+   confirmação, nenhuma limpeza. É exatamente o modo "rodando sozinho"
+   recomendado acima, e nele o acúmulo é o mesmo de sempre.
+
+Ou seja: o bot resolve o disco de quem dispara pelo celular. Para o timer, quem
+limpa ainda é isto — as saídas finais já estão copiadas para
+`storage/growth/out/`:
 
 ```bash
 find storage/tasks -mindepth 1 -maxdepth 1 -type d -mtime +7 -exec rm -rf {} +

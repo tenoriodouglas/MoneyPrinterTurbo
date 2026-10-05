@@ -7,6 +7,11 @@ mark a script as templated; a model follows that instruction most of the time,
 not all of it.
 
 Both are cheap to verify after the fact and expensive to discover later.
+
+The checks read the file itself, which a delivered video no longer is: the box
+is small and finished renders are deleted once they reach the phone. So a
+verdict measured at render time is kept in the ledger row, and a review falls
+back to it when the file is gone.
 """
 
 from __future__ import annotations
@@ -15,7 +20,9 @@ import json
 import re
 import subprocess
 from dataclasses import dataclass, field
+from datetime import datetime, timezone
 from pathlib import Path
+from typing import Any
 
 from growth.niche import Niche, NicheError, load_niche
 from growth.produce import LEDGER_PATH
@@ -50,6 +57,10 @@ class VideoReview:
     words: int = 0
     black: float = 0.0
     issues: list[tuple[str, str]] = field(default_factory=list)
+    # Empty while the numbers above were measured from the file just now; an
+    # ISO timestamp once they come from a ledger row, saying when they were
+    # true. A viewer needs that to read "60s, no black frames" correctly.
+    reviewed_at: str = ""
 
     @property
     def status(self) -> str:
@@ -64,6 +75,50 @@ class VideoReview:
         if self.duration <= 0:
             return 0.0
         return self.words / (self.duration / 60)
+
+    def as_dict(self) -> dict[str, Any]:
+        """Flatten the verdict into JSON a ledger row can carry.
+
+        The dict only exists to outlive the file, so it is stamped with the
+        moment of measurement unless it already carries one.
+        """
+        return {
+            "subject": self.subject,
+            "niche_id": self.niche_id,
+            "path": str(self.path),
+            "duration": self.duration,
+            "width": self.width,
+            "height": self.height,
+            "words": self.words,
+            "black": self.black,
+            "issues": [[level, message] for level, message in self.issues],
+            "reviewed_at": self.reviewed_at or datetime.now(timezone.utc).isoformat(),
+        }
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> VideoReview:
+        """Rebuild a verdict stored by as_dict().
+
+        Anything that is not shaped like one raises rather than being read
+        past: dropping a damaged issue would turn a failure into a pass.
+        """
+        issues = data.get("issues") or []
+        if not isinstance(issues, (list, tuple)) or any(
+            not isinstance(entry, (list, tuple)) or len(entry) != 2 for entry in issues
+        ):
+            raise ValueError("issues is not a list of (level, message) pairs")
+        return cls(
+            subject=str(data.get("subject", "")),
+            niche_id=str(data.get("niche_id", "")),
+            path=Path(str(data.get("path", ""))),
+            duration=float(data.get("duration") or 0.0),
+            width=int(data.get("width") or 0),
+            height=int(data.get("height") or 0),
+            words=int(data.get("words") or 0),
+            black=float(data.get("black") or 0.0),
+            issues=[(str(level), str(message)) for level, message in issues],
+            reviewed_at=str(data.get("reviewed_at", "")),
+        )
 
 
 def probe(path: Path) -> tuple[float, int, int]:
@@ -143,8 +198,35 @@ def find_banned(script: str, niche: Niche) -> list[str]:
     ]
 
 
+def stored_reviews(record: dict) -> dict[str, VideoReview]:
+    """Verdicts a row recorded at render time, keyed by the file each describes.
+
+    A row written before produce started storing them has none, and an entry
+    that cannot be read back, or that carries no timestamp to tell it apart
+    from a live measurement, is dropped: a deleted file must never read as a
+    pass on the strength of a broken record.
+    """
+    stored: dict[str, VideoReview] = {}
+    for entry in record.get("reviews") or []:
+        if not isinstance(entry, dict):
+            continue
+        try:
+            review = VideoReview.from_dict(entry)
+        except (TypeError, ValueError):
+            continue
+        if review.reviewed_at:
+            stored[str(entry.get("path", ""))] = review
+    return stored
+
+
 def review_record(record: dict) -> list[VideoReview]:
-    """Check every file a ledger row produced."""
+    """Check every file a ledger row produced.
+
+    Files still on disk are measured again. For one that is gone, the verdict
+    the row stored under "reviews" is replayed instead, carrying the
+    reviewed_at stamp that says it was measured then rather than now; without
+    such a verdict the file is reported missing, as before.
+    """
     try:
         niche = load_niche(record.get("niche_id", ""))
     except NicheError:
@@ -153,6 +235,7 @@ def review_record(record: dict) -> list[VideoReview]:
     platforms = record.get("platforms") or (list(niche.platforms) if niche else [])
     script = read_script(record.get("subtitle_path", ""))
     words = len(re.findall(r"\b[\w']+\b", script))
+    stored = stored_reviews(record)
 
     reviews: list[VideoReview] = []
     for file_path in record.get("files", []):
@@ -164,6 +247,12 @@ def review_record(record: dict) -> list[VideoReview]:
             words=words,
         )
         if not path.is_file():
+            # Deleted after delivery is the normal case on a small box, so
+            # answer from what was measured while the file was there.
+            kept = stored.get(file_path)
+            if kept is not None:
+                reviews.append(kept)
+                continue
             review.issues.append((FAIL, "the file is missing"))
             reviews.append(review)
             continue
